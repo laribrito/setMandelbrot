@@ -173,14 +173,14 @@ int main() {
                 if (val >= MAX_ITER) {
                     ppmFile << "0 0 0 "; // Preto (pontos dentro do conjunto)
                 } else {
-                    // Colorização RGB: três senos com fases e frequências diferentes.
-                    // Cada canal oscila em ritmo próprio, criando um gradiente de cores ricas.
-                    // A fase (0.0, 2.094, 4.188) = (0, 2π/3, 4π/3) separa R, G e B em 120°
-                    // criando uma roda de cores completa que cicla suavemente com as iterações.
-                    double t = static_cast<double>(val);
-                    int r = static_cast<int>(std::sin(0.016 * t + 0.0)   * 127 + 128);
-                    int g = static_cast<int>(std::sin(0.013 * t + 2.094) * 127 + 128);
-                    int b = static_cast<int>(std::sin(0.010 * t + 4.188) * 127 + 128);
+                    // Paleta clássica (Azul profundo -> Ciano -> Branco -> Amarelo -> Marrom)
+                    // Usamos a raiz quadrada de (val / MAX_ITER) para distribuir melhor
+                    // as cores, já que a maioria dos pontos escapa rapidamente.
+                    // Isso remove a escuridão e cria o visual clássico da imagem.
+                    double t = std::sqrt(static_cast<double>(val) / MAX_ITER);
+                    int r = static_cast<int>(9  * (1-t) * t*t*t        * 255);
+                    int g = static_cast<int>(15 * (1-t)*(1-t) * t*t    * 255);
+                    int b = static_cast<int>(8.5* (1-t)*(1-t)*(1-t)*t  * 255);
                     ppmFile << r << " " << g << " " << b << " ";
                 }
             }
