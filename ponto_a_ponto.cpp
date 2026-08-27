@@ -19,10 +19,6 @@ public:
         return Complex(real + other.real, imag + other.imag);
     }
 
-    Complex operator-(const Complex& other) const {
-        return Complex(real - other.real, imag - other.imag);
-    }
-
     Complex operator*(const Complex& other) const {
         return Complex(real * other.real - imag * other.imag,
                        real * other.imag + imag * other.real);
@@ -40,27 +36,8 @@ public:
         return *this;
     }
 
-    bool operator==(const Complex& other) const {
-        return std::abs(real - other.real) < EPSILON && std::abs(imag - other.imag) < EPSILON;
-    }
-
-    bool operator==(double val) const {
-        return std::abs(real - val) < EPSILON && std::abs(imag) < EPSILON;
-    }
-
-    // Retorna o quadrado do módulo (útil para otimização em cálculos de fractais)
     double magnitudeSquared() const {
         return real * real + imag * imag;
-    }
-
-    Complex point(double x, double y){
-        real = x;
-        imag = y;
-        return *this;
-    }
-
-    void print() const {
-        std::cout << real << (imag >= 0 ? "+" : "" ) << imag << "i" << std::endl;
     }
 };
 
@@ -78,13 +55,6 @@ RGB getPaletteColor(double t_base) {
 }
 
 int main() {
-    // Começa a marcar o tempo
-    auto start = std::chrono::high_resolution_clock::now();
-
-    // -------------------------------------------------------------
-    // Cálculo
-    // -------------------------------------------------------------
-
     // Parâmetros padrão
     int WIDTH = 4096, HEIGHT = 4096, MAX_ITER = 1000;
     double RE_MIN = -2.0, RE_MAX = 1.0, IM_MIN = -1.5, IM_MAX = 1.5;
@@ -93,9 +63,7 @@ int main() {
     if (inFile.is_open()) {
         std::string line;
         while (std::getline(inFile, line)) {
-            // Ignora linhas vazias ou comentários (caso queira adicionar no futuro)
             if (line.empty() || line[0] == '#') continue; 
-            
             size_t pos = line.find('=');
             if (pos != std::string::npos) {
                 std::string key = line.substr(0, pos);
@@ -117,15 +85,29 @@ int main() {
 
     double tamPixel_re = (RE_MAX - RE_MIN)/WIDTH,
            tamPixel_im = (IM_MAX - IM_MIN)/HEIGHT;
-    int limHeight = HEIGHT / 2 + 1;
-    
-    // Alocamos apenas a metade superior para economizar memória e evitar estouro de pilha
-    std::vector<int> temps(limHeight * WIDTH, 0);
 
-    for (int i = 0; i < WIDTH; i++) {
-        double x = RE_MIN + i * tamPixel_re;
-        for (int j = 0; j < limHeight; j++) {
-            double y = IM_MIN + j * tamPixel_im;
+    // Determina o número da execução atual com base nas linhas registradas no CSV
+    int executionNum = 1;
+    std::ifstream checkFile("dateTimeExecution.csv");
+    if (checkFile.is_open()) {
+        std::string line;
+        while (std::getline(checkFile, line)) {
+            if (!line.empty()) executionNum++;
+        }
+        checkFile.close();
+    }
+
+    // Aloca a matriz completa para toda a imagem
+    std::vector<int> temps(HEIGHT * WIDTH, 0);
+
+    // Começa a marcar o tempo
+    auto start = std::chrono::high_resolution_clock::now();
+
+    // Loop direto Ponto a Ponto salvando na matriz
+    for (int j = 0; j < HEIGHT; ++j) {
+        double y = IM_MIN + j * tamPixel_im;
+        for (int i = 0; i < WIDTH; ++i) {
+            double x = RE_MIN + i * tamPixel_re;
             Complex c(x, y);
             Complex z = 0;
             int temp = 0;
@@ -136,6 +118,7 @@ int main() {
                 temp++;
             }
             
+            // Grava na matriz
             temps[j * WIDTH + i] = temp;
         }
     }
@@ -144,63 +127,46 @@ int main() {
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
 
-    // Determina o número da execução atual com base nas linhas registradas no CSV
-    int executionNum = 1;
-    std::ifstream checkFile("dateTimeExecution.csv");
-    if (checkFile.is_open()) {
-        std::string line;
-        while (std::getline(checkFile, line)) {
-            if (!line.empty()) {
-                executionNum++;
-            }
-        }
-        checkFile.close();
-    }
-
-    // Grava a tabela de inteiros para validação
+    // Prepara os arquivos de saída
     std::string tableFilename = "mandelbrot_table_" + std::to_string(executionNum) + ".txt";
     std::ofstream tableFile(tableFilename);
+
     if (tableFile.is_open()) {
         for (int j = 0; j < HEIGHT; ++j) {
-            int targetRow = (j < limHeight) ? j : (HEIGHT - j);
             for (int i = 0; i < WIDTH; ++i) {
-                tableFile << temps[targetRow * WIDTH + i] << (i == WIDTH - 1 ? "" : " ");
+                tableFile << temps[j * WIDTH + i] << (i == WIDTH - 1 ? "" : " ");
             }
             tableFile << "\n";
         }
         tableFile.close();
         std::cout << "Tabela de iteracoes salva com sucesso em '" << tableFilename << "'\n";
-    } else {
-        std::cerr << "Erro ao abrir " << tableFilename << " para escrita.\n";
     }
 
-    // Grava a matriz em formato PPM P3
     std::string ppmFilename = "mandelbrot_" + std::to_string(executionNum) + ".ppm";
     std::ofstream ppmFile(ppmFilename);
+    
     if (ppmFile.is_open()) {
         int blackLineWidth = static_cast<int>(WIDTH * 0.01); // Linha preta 1% da largura
-        int gradientWidth = static_cast<int>(WIDTH * 0.10); // Gradiente 10% da largura
+        int gradientWidth = static_cast<int>(WIDTH * 0.10);  // Gradiente 10% da largura
         int ppmWidth = WIDTH + blackLineWidth + gradientWidth;
         
         ppmFile << "P3\n" << ppmWidth << " " << HEIGHT << "\n255\n";
         for (int j = 0; j < HEIGHT; ++j) {
-            int targetRow = (j < limHeight) ? j : (HEIGHT - j);
             for (int i = 0; i < WIDTH; ++i) {
-                int val = temps[targetRow * WIDTH + i];
-                if (val >= MAX_ITER) {
-                    ppmFile << "0 0 0 "; // Preto (pontos dentro do conjunto)
+                int temp = temps[j * WIDTH + i];
+                if (temp >= MAX_ITER) {
+                    ppmFile << "0 0 0 "; // Preto
                 } else {
-                    RGB color = getPaletteColor(static_cast<double>(val) / MAX_ITER);
+                    RGB color = getPaletteColor(static_cast<double>(temp) / MAX_ITER);
                     ppmFile << color.r << " " << color.g << " " << color.b << " ";
                 }
             }
             
-            // Linha preta separadora
+            // Finaliza a linha no PPM (com linha preta e gradiente)
             for (int i = 0; i < blackLineWidth; ++i) {
                 ppmFile << "0 0 0 ";
             }
             
-            // Gradiente da paleta - De baixo (t_base=0) para cima (t_base=1)
             double t_grad = static_cast<double>(HEIGHT - 1 - j) / (HEIGHT - 1);
             RGB gradColor = getPaletteColor(t_grad);
             
@@ -212,15 +178,12 @@ int main() {
         }
         ppmFile.close();
         std::cout << "Imagem em escala de cinza salva com sucesso em '" << ppmFilename << "'\n";
-    } else {
-        std::cerr << "Erro ao abrir " << ppmFilename << " para escrita.\n";
     }
 
     // Obtém a data e hora atual do sistema
     auto now = std::chrono::system_clock::now();
     std::time_t current_time = std::chrono::system_clock::to_time_t(now);
 
-    // Verifica se o arquivo CSV é novo ou está vazio para gravar o cabeçalho
     bool isNewFile = false;
     {
         std::ifstream testFile("dateTimeExecution.csv");
@@ -229,7 +192,6 @@ int main() {
         }
     }
 
-    // Salva o resultado adicionando (append) no arquivo CSV
     std::ofstream csvFile("dateTimeExecution.csv", std::ios::app);
     if (csvFile.is_open()) {
         const char* machineName = std::getenv("COMPUTERNAME");
@@ -240,7 +202,6 @@ int main() {
             csvFile << "DataHora,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code\n";
         }
         
-        // Formato: YYYY-MM-DD HH:MM:SS,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code
         csvFile << std::put_time(std::localtime(&current_time), "%Y-%m-%d %H:%M:%S") 
                 << "," << elapsed.count()
                 << "," << WIDTH
@@ -251,14 +212,12 @@ int main() {
                 << "," << IM_MIN
                 << "," << IM_MAX 
                 << "," << machineName 
-                << ",sequencial\n";
+                << ",ponto_a_ponto\n";
         csvFile.close();
         
-        std::cout << "Execução finalizada!\n";
-        std::cout << "Tempo gasto: " << elapsed.count() << " segundos.\n";
+        std::cout << "Execução Ponto a Ponto finalizada!\n";
+        std::cout << "Tempo gasto (puro processamento): " << elapsed.count() << " segundos.\n";
         std::cout << "Registro salvo em 'dateTimeExecution.csv'\n";
-    } else {
-        std::cerr << "Erro ao abrir dateTimeExecution.csv para escrita.\n";
     }
 
     return 0;
