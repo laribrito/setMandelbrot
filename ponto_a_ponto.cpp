@@ -105,7 +105,7 @@ int main() {
 
     // Loop direto Ponto a Ponto salvando na matriz
     for (int j = 0; j < HEIGHT; ++j) {
-        double y = IM_MIN + j * tamPixel_im;
+        double y = IM_MAX - j * tamPixel_im;
         for (int i = 0; i < WIDTH; ++i) {
             double x = RE_MIN + i * tamPixel_re;
             Complex c(x, y);
