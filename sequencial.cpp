@@ -64,6 +64,19 @@ public:
     }
 };
 
+struct RGB {
+    int r, g, b;
+};
+
+// Retorna a cor da paleta clássica baseada no valor t_base entre 0.0 e 1.0
+RGB getPaletteColor(double t_base) {
+    double t = std::cbrt(t_base);
+    int r = static_cast<int>(9   * (1-t) * t*t*t        * 255);
+    int g = static_cast<int>(15  * (1-t)*(1-t) * t*t    * 255);
+    int b = static_cast<int>(8.5 * (1-t)*(1-t)*(1-t)*t  * 255);
+    return {r, g, b};
+}
+
 int main() {
     // Começa a marcar o tempo
     auto start = std::chrono::high_resolution_clock::now();
@@ -161,11 +174,15 @@ int main() {
         std::cerr << "Erro ao abrir " << tableFilename << " para escrita.\n";
     }
 
-    // Grava a matriz em formato PPM P3 (Escala de Cinza)
+    // Grava a matriz em formato PPM P3
     std::string ppmFilename = "mandelbrot_" + std::to_string(executionNum) + ".ppm";
     std::ofstream ppmFile(ppmFilename);
     if (ppmFile.is_open()) {
-        ppmFile << "P3\n" << WIDTH << " " << HEIGHT << "\n255\n";
+        int blackLineWidth = static_cast<int>(WIDTH * 0.05); // Linha preta 5% da largura
+        int gradientWidth = static_cast<int>(WIDTH * 0.10); // Gradiente 10% da largura
+        int ppmWidth = WIDTH + blackLineWidth + gradientWidth;
+        
+        ppmFile << "P3\n" << ppmWidth << " " << HEIGHT << "\n255\n";
         for (int j = 0; j < HEIGHT; ++j) {
             int targetRow = (j < limHeight) ? j : (HEIGHT - 1 - j);
             for (int i = 0; i < WIDTH; ++i) {
@@ -173,17 +190,24 @@ int main() {
                 if (val >= MAX_ITER) {
                     ppmFile << "0 0 0 "; // Preto (pontos dentro do conjunto)
                 } else {
-                    // Paleta clássica (Azul profundo -> Ciano -> Branco -> Amarelo -> Marrom)
-                    // Usamos a raiz quadrada de (val / MAX_ITER) para distribuir melhor
-                    // as cores, já que a maioria dos pontos escapa rapidamente.
-                    // Isso remove a escuridão e cria o visual clássico da imagem.
-                    double t = std::sqrt(static_cast<double>(val) / MAX_ITER);
-                    int r = static_cast<int>(9  * (1-t) * t*t*t        * 255);
-                    int g = static_cast<int>(15 * (1-t)*(1-t) * t*t    * 255);
-                    int b = static_cast<int>(8.5* (1-t)*(1-t)*(1-t)*t  * 255);
-                    ppmFile << r << " " << g << " " << b << " ";
+                    RGB color = getPaletteColor(static_cast<double>(val) / MAX_ITER);
+                    ppmFile << color.r << " " << color.g << " " << color.b << " ";
                 }
             }
+            
+            // Linha preta separadora
+            for (int i = 0; i < blackLineWidth; ++i) {
+                ppmFile << "0 0 0 ";
+            }
+            
+            // Gradiente da paleta - De baixo (t_base=0) para cima (t_base=1)
+            double t_grad = static_cast<double>(HEIGHT - 1 - j) / (HEIGHT - 1);
+            RGB gradColor = getPaletteColor(t_grad);
+            
+            for (int i = 0; i < gradientWidth; ++i) {
+                ppmFile << gradColor.r << " " << gradColor.g << " " << gradColor.b << " ";
+            }
+            
             ppmFile << "\n";
         }
         ppmFile.close();
