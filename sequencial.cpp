@@ -5,6 +5,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include <cstdlib>
 
 class Complex {
 public:
@@ -143,6 +144,23 @@ int main() {
         checkFile.close();
     }
 
+    // Grava a tabela de inteiros para validação
+    std::string tableFilename = "mandelbrot_table_" + std::to_string(executionNum) + ".txt";
+    std::ofstream tableFile(tableFilename);
+    if (tableFile.is_open()) {
+        for (int j = 0; j < HEIGHT; ++j) {
+            int targetRow = (j < limHeight) ? j : (HEIGHT - 1 - j);
+            for (int i = 0; i < WIDTH; ++i) {
+                tableFile << temps[targetRow * WIDTH + i] << (i == WIDTH - 1 ? "" : " ");
+            }
+            tableFile << "\n";
+        }
+        tableFile.close();
+        std::cout << "Tabela de iteracoes salva com sucesso em '" << tableFilename << "'\n";
+    } else {
+        std::cerr << "Erro ao abrir " << tableFilename << " para escrita.\n";
+    }
+
     // Grava a matriz em formato PPM P3 (Escala de Cinza)
     std::string ppmFilename = "mandelbrot_" + std::to_string(executionNum) + ".ppm";
     std::ofstream ppmFile(ppmFilename);
@@ -155,9 +173,15 @@ int main() {
                 if (val >= MAX_ITER) {
                     ppmFile << "0 0 0 "; // Preto (pontos dentro do conjunto)
                 } else {
-                    // Gradiente suave em escala de cinza usando função seno
-                    int gray = static_cast<int>(std::sin(0.1 * val) * 127 + 128);
-                    ppmFile << gray << " " << gray << " " << gray << " ";
+                    // Colorização RGB: três senos com fases e frequências diferentes.
+                    // Cada canal oscila em ritmo próprio, criando um gradiente de cores ricas.
+                    // A fase (0.0, 2.094, 4.188) = (0, 2π/3, 4π/3) separa R, G e B em 120°
+                    // criando uma roda de cores completa que cicla suavemente com as iterações.
+                    double t = static_cast<double>(val);
+                    int r = static_cast<int>(std::sin(0.016 * t + 0.0)   * 127 + 128);
+                    int g = static_cast<int>(std::sin(0.013 * t + 2.094) * 127 + 128);
+                    int b = static_cast<int>(std::sin(0.010 * t + 4.188) * 127 + 128);
+                    ppmFile << r << " " << g << " " << b << " ";
                 }
             }
             ppmFile << "\n";
@@ -184,11 +208,15 @@ int main() {
     // Salva o resultado adicionando (append) no arquivo CSV
     std::ofstream csvFile("dateTimeExecution.csv", std::ios::app);
     if (csvFile.is_open()) {
+        const char* machineName = std::getenv("COMPUTERNAME");
+        if (!machineName) machineName = std::getenv("HOSTNAME");
+        if (!machineName) machineName = "Unknown";
+
         if (isNewFile) {
-            csvFile << "DataHora,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX\n";
+            csvFile << "DataHora,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine\n";
         }
         
-        // Formato: YYYY-MM-DD HH:MM:SS,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX
+        // Formato: YYYY-MM-DD HH:MM:SS,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine
         csvFile << std::put_time(std::localtime(&current_time), "%Y-%m-%d %H:%M:%S") 
                 << "," << elapsed.count()
                 << "," << WIDTH
@@ -197,7 +225,8 @@ int main() {
                 << "," << RE_MIN
                 << "," << RE_MAX
                 << "," << IM_MIN
-                << "," << IM_MAX << "\n";
+                << "," << IM_MAX 
+                << "," << machineName << "\n";
         csvFile.close();
         
         std::cout << "Execução finalizada!\n";
