@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <cstdlib>
+#include <filesystem>
 
 class Complex {
 public:
@@ -157,8 +158,11 @@ int main() {
         checkFile.close();
     }
 
+    // Garante que a pasta out exista
+    std::filesystem::create_directories("out");
+
     // Grava a tabela de inteiros para validação
-    std::string tableFilename = "mandelbrot_table_" + std::to_string(executionNum) + ".txt";
+    std::string tableFilename = "out/mandelbrot_sequencial_" + std::to_string(executionNum) + "_table.ppm";
     std::ofstream tableFile(tableFilename);
     if (tableFile.is_open()) {
         for (int j = 0; j < HEIGHT; ++j) {
@@ -175,7 +179,7 @@ int main() {
     }
 
     // Grava a matriz em formato PPM P3
-    std::string ppmFilename = "mandelbrot_" + std::to_string(executionNum) + ".ppm";
+    std::string ppmFilename = "out/mandelbrot_sequencial_" + std::to_string(executionNum) + "_img.ppm";
     std::ofstream ppmFile(ppmFilename);
     if (ppmFile.is_open()) {
         int blackLineWidth = static_cast<int>(WIDTH * 0.01); // Linha preta 1% da largura

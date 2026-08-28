@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <cstdlib>
+#include <filesystem>
 
 class Complex {
 public:
@@ -127,8 +128,11 @@ int main() {
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
 
+    // Garante que a pasta out exista
+    std::filesystem::create_directories("out");
+
     // Prepara os arquivos de saída
-    std::string tableFilename = "mandelbrot_table_" + std::to_string(executionNum) + ".txt";
+    std::string tableFilename = "out/mandelbrot_pap_" + std::to_string(executionNum) + "_table.ppm";
     std::ofstream tableFile(tableFilename);
 
     if (tableFile.is_open()) {
@@ -140,9 +144,11 @@ int main() {
         }
         tableFile.close();
         std::cout << "Tabela de iteracoes salva com sucesso em '" << tableFilename << "'\n";
+    } else {
+        std::cerr << "Erro ao abrir " << tableFilename << " para escrita.\n";
     }
 
-    std::string ppmFilename = "mandelbrot_" + std::to_string(executionNum) + ".ppm";
+    std::string ppmFilename = "out/mandelbrot_pap_" + std::to_string(executionNum) + "_img.ppm";
     std::ofstream ppmFile(ppmFilename);
     
     if (ppmFile.is_open()) {
