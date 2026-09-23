@@ -112,8 +112,9 @@ def compile_binaries():
         env["PATH"] = "C:\\msys64\\mingw64\\bin;" + env.get("PATH", "")
 
     cmds = [
-        ("ponto_a_ponto", "g++ -O3 -ffast-math -std=c++17 -o ponto_a_ponto ponto_a_ponto.cpp"),
-        ("paralelo",       "g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo paralelo.cpp"),
+        ("sequencial",        "g++ -O3 -ffast-math -o sequencial sequencial.cpp"),
+        ("ponto_a_ponto",     "g++ -O3 -ffast-math -std=c++17 -o ponto_a_ponto ponto_a_ponto.cpp"),
+        ("paralelo",          "g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo paralelo.cpp"),
         ("paralelo_collapse", "g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo_collapse paralelo_collapse.cpp"),
     ]
     for name, cmd in cmds:
@@ -124,10 +125,12 @@ def compile_binaries():
             sys.exit(1)
     print("✅ Compilação concluída com sucesso!\n")
 
-def run_executable(executable, machine_name="deCasa"):
+def run_executable(executable, machine_name="deCasa", threads=None):
     env = os.environ.copy()
     env["HOSTNAME"] = machine_name
     env["COMPUTERNAME"] = machine_name
+    if threads is not None:
+        env["OMP_NUM_THREADS"] = str(threads)
 
     cmd = f"./{executable}" if sys.platform != "win32" else f"{executable}.exe"
 
@@ -162,6 +165,15 @@ def match_record(row, t, machine_name):
 
     row_code = row.get("Code", "").strip()
     if row_code != t["exe"]:
+        return False
+
+    # Validação do número de Threads
+    expected_threads = t.get("THREADS", 1)
+    try:
+        row_threads = int(row.get("Threads", 1))
+        if row_threads != expected_threads:
+            return False
+    except (ValueError, TypeError):
         return False
 
     try:
@@ -266,15 +278,17 @@ def execute_battery(tests, reps, machine_name, force=False, max_out_files=6):
         existing_times = item["existing_times"]
         needed = item["needed_runs"]
         mode_info = f"{t['SCHEDULE']}:{t['CHUNK_SIZE']}" if t['exe'] in ('paralelo', 'paralelo_collapse') else "N/A"
+        threads_info = f"threads={t.get('THREADS', 1)}"
 
         # Se todas as repetições já existem no histórico e não foi solicitado --force
         if needed == 0 and not force:
             avg_prev = sum(existing_times) / len(existing_times) if existing_times else 0.0
-            print(f"⏩ [{idx:02d}/{len(tests)}] {t['exe'].upper():13} | {t['scenario_name']:22} | {t['WIDTH']}x{t['HEIGHT']} | Mode: {mode_info:<12} -> [JÁ CONCLUÍDO ({len(existing_times)}/{reps})] (Média: {avg_prev:.2f}s)")
+            print(f"⏩ [{idx:02d}/{len(tests)}] {t['exe'].upper():13} | {t['scenario_name']:22} | {t['WIDTH']}x{t['HEIGHT']} | {threads_info:<11} | Mode: {mode_info:<12} -> [JÁ CONCLUÍDO ({len(existing_times)}/{reps})] (Média: {avg_prev:.2f}s)")
             results_summary.append({
                 "exe": t["exe"],
                 "scenario": t["scenario_key"],
                 "size": f"{t['WIDTH']}x{t['HEIGHT']}",
+                "threads": t.get("THREADS", 1),
                 "schedule": t["SCHEDULE"],
                 "chunk": t["CHUNK_SIZE"],
                 "avg_time": avg_prev,
@@ -284,7 +298,7 @@ def execute_battery(tests, reps, machine_name, force=False, max_out_files=6):
             continue
 
         status_msg = f"[Executando {needed}/{reps}]" if len(existing_times) == 0 else f"[PARCIAL: {len(existing_times)}/{reps} no histórico, executando +{needed}]"
-        print(f"📌 [{idx:02d}/{len(tests)}] {t['exe'].upper():13} | {t['scenario_name']:22} | {t['WIDTH']}x{t['HEIGHT']} | Mode: {mode_info:<12} -> {status_msg}")
+        print(f"📌 [{idx:02d}/{len(tests)}] {t['exe'].upper():13} | {t['scenario_name']:22} | {t['WIDTH']}x{t['HEIGHT']} | {threads_info:<11} | Mode: {mode_info:<12} -> {status_msg}")
 
         # Grava os parâmetros atuais no in.txt
         write_in_txt({
@@ -296,7 +310,8 @@ def execute_battery(tests, reps, machine_name, force=False, max_out_files=6):
             "IM_MIN": t["IM_MIN"],
             "IM_MAX": t["IM_MAX"],
             "SCHEDULE": t["SCHEDULE"],
-            "CHUNK_SIZE": t["CHUNK_SIZE"]
+            "CHUNK_SIZE": t["CHUNK_SIZE"],
+            "THREADS": t.get("THREADS", 1)
         })
 
         new_durations = []
@@ -304,7 +319,7 @@ def execute_battery(tests, reps, machine_name, force=False, max_out_files=6):
             run_count += 1
             cur_rep_num = len(existing_times) + rep
             print(f"   -> Repetição {cur_rep_num}/{reps} (Pendente {run_count}/{total_runs_needed})... ", end="", flush=True)
-            d = run_executable(t["exe"], machine_name=machine_name)
+            d = run_executable(t["exe"], machine_name=machine_name, threads=t.get("THREADS"))
             if d is not None:
                 new_durations.append(d)
                 print(f"OK ({d:.2f}s)")
@@ -324,6 +339,7 @@ def execute_battery(tests, reps, machine_name, force=False, max_out_files=6):
             "exe": t["exe"],
             "scenario": t["scenario_key"],
             "size": f"{t['WIDTH']}x{t['HEIGHT']}",
+            "threads": t.get("THREADS", 1),
             "schedule": t["SCHEDULE"],
             "chunk": t["CHUNK_SIZE"],
             "avg_time": avg_t,
@@ -338,16 +354,37 @@ def execute_battery(tests, reps, machine_name, force=False, max_out_files=6):
 
     # Imprime tabela resumo consolidada
     print("📋 RESUMO CONSOLIDADO (MÉDIAS):")
-    print(f"{'Programa':<14} | {'Cenário':<6} | {'Resolução':<11} | {'Schedule':<9} | {'Chunk':<6} | {'Execuções':<10} | {'Tempo Médio':<11}")
-    print("-" * 88)
+    print(f"{'Programa':<14} | {'Cenário':<6} | {'Resolução':<11} | {'Threads':<7} | {'Schedule':<9} | {'Chunk':<6} | {'Execuções':<10} | {'Tempo Médio':<11}")
+    print("-" * 98)
     for r in results_summary:
-        print(f"{r['exe']:<14} | {r['scenario']:<6} | {r['size']:<11} | {r['schedule']:<9} | {str(r['chunk']):<6} | {str(r['reps_executed']) + '/' + str(reps):<10} | {r['avg_time']:.2f}s")
-    print("=" * 88)
+        print(f"{r['exe']:<14} | {r['scenario']:<6} | {r['size']:<11} | {str(r.get('threads', 1)):<7} | {r['schedule']:<9} | {str(r['chunk']):<6} | {str(r['reps_executed']) + '/' + str(reps):<10} | {r['avg_time']:.2f}s")
+    print("=" * 98)
 
-def build_test_list(mode, scenarios, sizes, schedules):
+def build_test_list(mode, scenarios, sizes, schedules, threads=4):
     tests = []
-    # 1. Ponto a Ponto
-    if mode in ["all", "pap"]:
+    # 0. Sequencial (com otimização de simetria)
+    if mode in ["all", "seq", "base"]:
+        for scen_key in scenarios:
+            scen = SCENARIOS[scen_key]
+            for size in sizes:
+                tests.append({
+                    "exe": "sequencial",
+                    "scenario_key": scen_key,
+                    "scenario_name": scen["name"],
+                    "WIDTH": size,
+                    "HEIGHT": size,
+                    "MAX_ITER": scen["MAX_ITER"],
+                    "RE_MIN": scen["RE_MIN"],
+                    "RE_MAX": scen["RE_MAX"],
+                    "IM_MIN": scen["IM_MIN"],
+                    "IM_MAX": scen["IM_MAX"],
+                    "SCHEDULE": "N/A",
+                    "CHUNK_SIZE": 0,
+                    "THREADS": 1
+                })
+
+    # 1. Ponto a Ponto (cálculo sequencial ponto a ponto - caso base padrão)
+    if mode in ["all", "pap", "base"]:
         for scen_key in scenarios:
             scen = SCENARIOS[scen_key]
             for size in sizes:
@@ -363,7 +400,8 @@ def build_test_list(mode, scenarios, sizes, schedules):
                     "IM_MIN": scen["IM_MIN"],
                     "IM_MAX": scen["IM_MAX"],
                     "SCHEDULE": "N/A",
-                    "CHUNK_SIZE": 0
+                    "CHUNK_SIZE": 0,
+                    "THREADS": 1
                 })
 
     # 2. Paralelo (loop externo)
@@ -385,7 +423,8 @@ def build_test_list(mode, scenarios, sizes, schedules):
                         "IM_MIN": scen["IM_MIN"],
                         "IM_MAX": scen["IM_MAX"],
                         "SCHEDULE": sched_name,
-                        "CHUNK_SIZE": int(chunk_str)
+                        "CHUNK_SIZE": int(chunk_str),
+                        "THREADS": threads
                     })
 
     # 3. Paralelo Collapse(2)
@@ -407,7 +446,8 @@ def build_test_list(mode, scenarios, sizes, schedules):
                         "IM_MIN": scen["IM_MIN"],
                         "IM_MAX": scen["IM_MAX"],
                         "SCHEDULE": sched_name,
-                        "CHUNK_SIZE": int(chunk_str)
+                        "CHUNK_SIZE": int(chunk_str),
+                        "THREADS": threads
                     })
     return tests
 
@@ -418,7 +458,7 @@ def show_interactive_menu():
     print(" Escolha uma opção para executar:")
     print("  [1] 🚀 RODAR TUDO UM APÓS O OUTRO (Ponto a Ponto + Paralelo + Collapse)")
     print("      -> Resoluções: 4096, 8192, 16384 | Full e Zoom | 3x cada")
-    print("  [2] 🏎️  Rodar apenas PONTO A PONTO (3x cada em 4096, 8192, 16384)")
+    print("  [2] 🏎️  Rodar apenas CASOS BASE / PONTO A PONTO (3x cada em 4096, 8192, 16384)")
     print("  [3] ⚡ Rodar apenas PARALELO (Static, Dynamic, Guided, Auto - 3x cada)")
     print("  [4] 🔀 Rodar apenas PARALELO COLLAPSE(2) (Static, Dynamic, Guided, Auto - 3x cada)")
     print("  [5] 🧪 Teste Rápido (Apenas resolução 4096, 1 repetição de cada)")
@@ -431,8 +471,10 @@ def main():
     parser = argparse.ArgumentParser(description="Automatizador de Benchmarks Mandelbrot")
     parser.add_argument("--tudo", "-t", action="store_true",
                         help="Opção rápida: roda TUDO um após o outro (ponto a ponto + paralelo, 3x cada)")
-    parser.add_argument("--mode", choices=["all", "pap", "paralelo", "collapse"], default=None,
-                        help="Quais programas rodar: 'pap', 'paralelo', 'collapse' ou 'all'")
+    parser.add_argument("--mode", choices=["all", "pap", "seq", "base", "paralelo", "collapse"], default=None,
+                        help="Quais programas rodar: 'pap' (ponto a ponto), 'seq' (sequencial), 'base' (ambos os bases), 'paralelo', 'collapse' ou 'all'")
+    parser.add_argument("--threads", "-j", type=int, default=4,
+                        help="Número de threads OpenMP para as versões paralelas (padrão: 4)")
     parser.add_argument("--reps", type=int, default=3,
                         help="Número de repetições por teste. Padrão: 3")
     parser.add_argument("--sizes", nargs="+", type=int, default=[4096, 8192, 16384],
@@ -454,7 +496,7 @@ def main():
     if args.tudo:
         if not args.no_compile:
             compile_binaries()
-        tests = build_test_list("all", args.scenarios, args.sizes, args.schedules)
+        tests = build_test_list("all", args.scenarios, args.sizes, args.schedules, threads=args.threads)
         execute_battery(tests, args.reps, args.machine, force=args.force, max_out_files=args.max_out_files)
         return
 
@@ -490,14 +532,14 @@ def main():
 
         if not args.no_compile:
             compile_binaries()
-        tests = build_test_list(mode, args.scenarios, sizes, args.schedules)
+        tests = build_test_list(mode, args.scenarios, sizes, args.schedules, threads=args.threads)
         execute_battery(tests, reps, args.machine, force=args.force, max_out_files=args.max_out_files)
         return
 
     # Execução via argumentos de linha de comando
     if not args.no_compile:
         compile_binaries()
-    tests = build_test_list(args.mode, args.scenarios, args.sizes, args.schedules)
+    tests = build_test_list(args.mode, args.scenarios, args.sizes, args.schedules, threads=args.threads)
     execute_battery(tests, args.reps, args.machine, force=args.force, max_out_files=args.max_out_files)
 
 if __name__ == "__main__":
