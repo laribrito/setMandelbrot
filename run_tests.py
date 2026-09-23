@@ -113,7 +113,8 @@ def compile_binaries():
 
     cmds = [
         ("ponto_a_ponto", "g++ -O3 -ffast-math -std=c++17 -o ponto_a_ponto ponto_a_ponto.cpp"),
-        ("paralelo", "g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo paralelo.cpp")
+        ("paralelo",       "g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo paralelo.cpp"),
+        ("paralelo_collapse", "g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo_collapse paralelo_collapse.cpp"),
     ]
     for name, cmd in cmds:
         print(f"  -> {cmd}")
@@ -181,7 +182,7 @@ def match_record(row, t, machine_name):
     except (ValueError, TypeError):
         return False
 
-    if t["exe"] == "paralelo":
+    if t["exe"] in ("paralelo", "paralelo_collapse"):
         sched = row.get("Schedule", "").strip().lower()
         if sched != t["SCHEDULE"].lower():
             return False
@@ -264,7 +265,7 @@ def execute_battery(tests, reps, machine_name, force=False, max_out_files=6):
         t = item["test"]
         existing_times = item["existing_times"]
         needed = item["needed_runs"]
-        mode_info = f"{t['SCHEDULE']}:{t['CHUNK_SIZE']}" if t['exe'] == 'paralelo' else "N/A"
+        mode_info = f"{t['SCHEDULE']}:{t['CHUNK_SIZE']}" if t['exe'] in ('paralelo', 'paralelo_collapse') else "N/A"
 
         # Se todas as repetições já existem no histórico e não foi solicitado --force
         if needed == 0 and not force:
@@ -365,7 +366,7 @@ def build_test_list(mode, scenarios, sizes, schedules):
                     "CHUNK_SIZE": 0
                 })
 
-    # 2. Paralelo
+    # 2. Paralelo (loop externo)
     if mode in ["all", "paralelo"]:
         for scen_key in scenarios:
             scen = SCENARIOS[scen_key]
@@ -386,6 +387,28 @@ def build_test_list(mode, scenarios, sizes, schedules):
                         "SCHEDULE": sched_name,
                         "CHUNK_SIZE": int(chunk_str)
                     })
+
+    # 3. Paralelo Collapse(2)
+    if mode in ["all", "collapse"]:
+        for scen_key in scenarios:
+            scen = SCENARIOS[scen_key]
+            for size in sizes:
+                for sched_spec in schedules:
+                    sched_name, chunk_str = sched_spec.split(":")
+                    tests.append({
+                        "exe": "paralelo_collapse",
+                        "scenario_key": scen_key,
+                        "scenario_name": scen["name"],
+                        "WIDTH": size,
+                        "HEIGHT": size,
+                        "MAX_ITER": scen["MAX_ITER"],
+                        "RE_MIN": scen["RE_MIN"],
+                        "RE_MAX": scen["RE_MAX"],
+                        "IM_MIN": scen["IM_MIN"],
+                        "IM_MAX": scen["IM_MAX"],
+                        "SCHEDULE": sched_name,
+                        "CHUNK_SIZE": int(chunk_str)
+                    })
     return tests
 
 def show_interactive_menu():
@@ -393,29 +416,30 @@ def show_interactive_menu():
     print("        ⚙️  AUTOMATIZADOR DE TESTES MANDELBROT         ")
     print("=======================================================")
     print(" Escolha uma opção para executar:")
-    print("  [1] 🚀 RODAR TUDO UM APÓS O OUTRO (Ponto a Ponto + 4 Schedules Paralelos)")
+    print("  [1] 🚀 RODAR TUDO UM APÓS O OUTRO (Ponto a Ponto + Paralelo + Collapse)")
     print("      -> Resoluções: 4096, 8192, 16384 | Full e Zoom | 3x cada")
     print("  [2] 🏎️  Rodar apenas PONTO A PONTO (3x cada em 4096, 8192, 16384)")
     print("  [3] ⚡ Rodar apenas PARALELO (Static, Dynamic, Guided, Auto - 3x cada)")
-    print("  [4] 🧪 Teste Rápido (Apenas resolução 4096, 1 repetição de cada)")
+    print("  [4] 🔀 Rodar apenas PARALELO COLLAPSE(2) (Static, Dynamic, Guided, Auto - 3x cada)")
+    print("  [5] 🧪 Teste Rápido (Apenas resolução 4096, 1 repetição de cada)")
     print("  [0] Sair")
     print("=======================================================")
-    choice = input("Digite a opção desejada [1-4, 0]: ").strip()
+    choice = input("Digite a opção desejada [1-5, 0]: ").strip()
     return choice
 
 def main():
     parser = argparse.ArgumentParser(description="Automatizador de Benchmarks Mandelbrot")
     parser.add_argument("--tudo", "-t", action="store_true",
                         help="Opção rápida: roda TUDO um após o outro (ponto a ponto + paralelo, 3x cada)")
-    parser.add_argument("--mode", choices=["all", "pap", "paralelo"], default=None,
-                        help="Quais programas rodar: 'pap', 'paralelo' ou 'all'")
+    parser.add_argument("--mode", choices=["all", "pap", "paralelo", "collapse"], default=None,
+                        help="Quais programas rodar: 'pap', 'paralelo', 'collapse' ou 'all'")
     parser.add_argument("--reps", type=int, default=3,
                         help="Número de repetições por teste. Padrão: 3")
     parser.add_argument("--sizes", nargs="+", type=int, default=[4096, 8192, 16384],
                         help="Resoluções a testar. Padrão: 4096 8192 16384")
     parser.add_argument("--scenarios", nargs="+", choices=["full", "zoom"], default=["full", "zoom"],
                         help="Cenários a testar: 'full', 'zoom' ou ambos. Padrão: full zoom")
-    parser.add_argument("--schedules", nargs="+", default=["static:64", "dynamic:1", "dynamic:64", "guided:64", "auto:0"],
+    parser.add_argument("--schedules", nargs="+", default=["static:64", "static:1024", "dynamic:1","dynamic:1024", "guided:64", "guided:1024", "auto:0"],
                         help="Schedules para o paralelo modo:chunk (ex: dynamic:1 static:64 guided:64 auto:0)")
     parser.add_argument("--no-compile", action="store_true", help="Pular etapa de compilação")
     parser.add_argument("--machine", default="deCasa", help="Nome da máquina para o CSV (padrão: deCasa)")
@@ -450,6 +474,10 @@ def main():
             sizes = [4096, 8192, 16384]
             reps = 3
         elif choice == "4":
+            mode = "collapse"
+            sizes = [4096, 8192, 16384]
+            reps = 3
+        elif choice == "5":
             mode = "all"
             sizes = [4096]
             reps = 1
