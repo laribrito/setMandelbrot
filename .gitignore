@@ -1,3 +1,7 @@
 mandelbrot*
 *.exe
 out/
+sequencial
+ponto_a_ponto
+paralelo
+comparador
