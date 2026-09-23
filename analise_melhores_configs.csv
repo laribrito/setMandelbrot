@@ -1,0 +1,7 @@
+Scenario,WIDTH,Code,Schedule,ChunkSize,Tempo_Medio,Speedup_Medio,Eficiencia_Media,Execucoes
+Visão Completa,4096,paralelo_collapse,dynamic,1024,3.7337525,3.5268927264365413,1.0201815007734647,4
+Visão Completa,8192,paralelo_collapse,dynamic,1024,12.004666666666665,4.156115048780762,1.0390287621951906,3
+Visão Completa,16384,paralelo_collapse,dynamic,1024,47.2272,4.1885366821269265,1.0471341705317316,3
+Zoom (Seahorse),4096,paralelo_collapse,dynamic,1024,1.3812533333333334,4.336836638191948,1.084209159547987,3
+Zoom (Seahorse),8192,paralelo_collapse,dynamic,1024,5.37744,4.292113964795987,1.0730284911989967,3
+Zoom (Seahorse),16384,paralelo_collapse,guided,1024,21.2266,4.343617335849639,1.0859043339624097,3
