@@ -64,6 +64,7 @@ int main() {
     // Parâmetros de escalonamento OpenMP
     std::string schedName = "dynamic"; // static | dynamic | guided | auto
     int chunkSize = 0;                 // 0 = deixa o OpenMP escolher o padrão
+    int numThreads = 0;                // 0 = padrão do ambiente / sistema
 
     std::ifstream inFile("in.txt");
     if (inFile.is_open()) {
@@ -84,11 +85,16 @@ int main() {
                 else if (key == "IM_MAX")     IM_MAX     = std::stod(value);
                 else if (key == "SCHEDULE")   schedName  = value;
                 else if (key == "CHUNK_SIZE") chunkSize  = std::stoi(value);
+                else if (key == "THREADS")    numThreads = std::stoi(value);
             }
         }
         inFile.close();
     } else {
         std::cerr << "Aviso: Nao foi possivel abrir in.txt. Utilizando resolucao 4096 e params padroes." << std::endl;
+    }
+
+    if (numThreads > 0) {
+        omp_set_num_threads(numThreads);
     }
 
     // Converte o nome do escalonamento para o tipo OpenMP e aplica em runtime
