@@ -76,7 +76,7 @@ CENARIOS_LISTA = [
 ]
 
 
-def carregar_dados(csv_path="dateTimeExecution.csv", machine="deCasa"):
+def carregar_dados(csv_path=None, machine="deCasa"):
     """Carrega dataset e calcula métricas isolando 1 e 4 threads."""
     df_raw = load_dataset(csv_path)
     if machine and machine.lower() != 'all':
@@ -88,7 +88,7 @@ def carregar_dados(csv_path="dateTimeExecution.csv", machine="deCasa"):
     return df_metrics
 
 
-def salvar_figura(fig, nome_base, dir_png="graficos_separados", dir_pdf="graficos_pdf", pdf_pages=None):
+def salvar_figura(fig, nome_base, dir_png, dir_pdf, pdf_pages=None):
     """Salva a figura em formato PNG de alta resolução e em formato PDF Vetorial."""
     path_png = os.path.join(dir_png, f"{nome_base}.png")
     path_pdf = os.path.join(dir_pdf, f"{nome_base}.pdf")
@@ -308,16 +308,20 @@ def gerar_todos_graficos():
     print(" 🎨 EXPORTANDO GRÁFICOS EM PDF E PNG (MANDELBROT OPENMP)")
     print("=" * 80)
 
-    dir_png = "graficos_separados"
-    dir_pdf = "graficos_pdf"
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(script_dir) if os.path.basename(script_dir) == "scripts" else script_dir
+    relatorios_dir = os.path.join(root_dir, "relatorios")
+
+    dir_png = os.path.join(relatorios_dir, "png")
+    dir_pdf = os.path.join(relatorios_dir, "pdf")
     os.makedirs(dir_png, exist_ok=True)
     os.makedirs(dir_pdf, exist_ok=True)
 
-    relatorio_pdf_path = "relatorio_graficos_mandelbrot.pdf"
+    relatorio_pdf_path = os.path.join(relatorios_dir, "relatorio_graficos_mandelbrot.pdf")
     df = carregar_dados()
 
-    print(f"\n📁 Diretório PNG: ./{dir_png}/")
-    print(f"📁 Diretório PDF: ./{dir_pdf}/")
+    print(f"\n📁 Diretório PNG: {dir_png}")
+    print(f"📁 Diretório PDF: {dir_pdf}")
     print(f"📑 Relatório PDF Consolidado: {relatorio_pdf_path}\n")
 
     with PdfPages(relatorio_pdf_path) as pdf_multipage:

@@ -4,6 +4,7 @@ Módulo de Métricas e Análises de Desempenho Paralelo (Mandelbrot OpenMP)
 Utiliza Pandas DataFrames para cálculo de Speedup, Eficiência e comparações de estratégias.
 """
 
+import os
 import sys
 import argparse
 import pandas as pd
@@ -15,12 +16,31 @@ pd.set_option('display.width', 1000)
 pd.set_option('display.float_format', lambda x: f'{x:.3f}')
 
 
-def load_dataset(csv_path: str = "dateTimeExecution.csv") -> pd.DataFrame:
+def resolve_csv_path(csv_path: str = None) -> str:
+    """Encontra o caminho do arquivo CSV no repositório."""
+    if csv_path and os.path.exists(csv_path):
+        return csv_path
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        csv_path,
+        "data/dateTimeExecution.csv",
+        "dateTimeExecution.csv",
+        os.path.join(script_dir, "..", "data", "dateTimeExecution.csv"),
+        os.path.join(script_dir, "dateTimeExecution.csv"),
+    ]
+    for c in candidates:
+        if c and os.path.exists(c):
+            return os.path.normpath(c)
+    return "data/dateTimeExecution.csv"
+
+
+def load_dataset(csv_path: str = None) -> pd.DataFrame:
     """Carrega o arquivo CSV de execuções em um Pandas DataFrame e padroniza os tipos."""
+    resolved_path = resolve_csv_path(csv_path)
     try:
-        df = pd.read_csv(csv_path)
+        df = pd.read_csv(resolved_path)
     except FileNotFoundError:
-        print(f"❌ Arquivo '{csv_path}' não encontrado.")
+        print(f"❌ Arquivo '{resolved_path}' não encontrado.")
         sys.exit(1)
 
     # Limpeza e padronização de tipos
@@ -219,14 +239,15 @@ def print_separator(title: str = "", char: str = "=", width: int = 100):
         print(char * width)
 
 
-def run_full_analysis(csv_path: str = "dateTimeExecution.csv", machine: str = "deCasa", export_csv: bool = False):
+def run_full_analysis(csv_path: str = None, machine: str = "deCasa", export_csv: bool = False):
     """Executa a bateria completa de análises em DataFrames e imprime um relatório estruturado."""
     print("\n" + "=" * 100)
     print(" 📊 SUÍTE DE ANÁLISE DE DESEMPENHO PARALELO - MANDELBROT OPENMP (PANDAS)")
     print("=" * 100)
 
     # 1. Carregamento e Enriquecimento
-    df_raw = load_dataset(csv_path)
+    resolved_path = resolve_csv_path(csv_path)
+    df_raw = load_dataset(resolved_path)
     total_execucoes_total = len(df_raw)
     
     # Filtra apenas a máquina desejada (padrão: deCasa)
@@ -235,7 +256,7 @@ def run_full_analysis(csv_path: str = "dateTimeExecution.csv", machine: str = "d
     
     total_execucoes = len(df_raw)
     
-    print(f"📁 Dataset carregado: {total_execucoes} execuções da máquina '{machine}' (de {total_execucoes_total} totais).")
+    print(f"📁 Dataset carregado de '{resolved_path}': {total_execucoes} execuções da máquina '{machine}' (de {total_execucoes_total} totais).")
     print(f"🖥️  Máquina em análise: {machine}")
 
     df_analisado = calculate_metrics(df_raw)
@@ -287,12 +308,17 @@ def run_full_analysis(csv_path: str = "dateTimeExecution.csv", machine: str = "d
 
     # Opcional: Exportar resumos para CSV
     if export_csv:
-        best_configs.to_csv("analise_melhores_configs.csv", index=False)
-        df_collapse.to_csv("analise_collapse_vs_1d.csv", index=False)
-        df_sched.to_csv("analise_schedules.csv", index=False)
-        df_scale.to_csv("analise_escalabilidade.csv", index=False)
-        df_analisado.to_csv("dados_com_metricas.csv", index=False)
-        print("\n✅ Resumos exportados com sucesso para arquivos CSV (.csv) no diretório atual.")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dir = os.path.dirname(script_dir) if os.path.basename(script_dir) == "scripts" else script_dir
+        out_dir = os.path.join(root_dir, "data")
+        os.makedirs(out_dir, exist_ok=True)
+
+        best_configs.to_csv(os.path.join(out_dir, "analise_melhores_configs.csv"), index=False)
+        df_collapse.to_csv(os.path.join(out_dir, "analise_collapse_vs_1d.csv"), index=False)
+        df_sched.to_csv(os.path.join(out_dir, "analise_schedules.csv"), index=False)
+        df_scale.to_csv(os.path.join(out_dir, "analise_escalabilidade.csv"), index=False)
+        df_analisado.to_csv(os.path.join(out_dir, "dados_com_metricas.csv"), index=False)
+        print(f"\n✅ Resumos exportados com sucesso para arquivos CSV na pasta '{out_dir}/'.")
 
     return df_analisado
 
@@ -303,7 +329,7 @@ def run_full_analysis(csv_path: str = "dateTimeExecution.csv", machine: str = "d
 
 def main():
     parser = argparse.ArgumentParser(description="Análise de Métricas e Desempenho Paralelo (Mandelbrot)")
-    parser.add_argument("--csv", default="dateTimeExecution.csv", help="Caminho do arquivo CSV de execuções (padrão: dateTimeExecution.csv)")
+    parser.add_argument("--csv", default=None, help="Caminho do arquivo CSV de execuções (padrão: data/dateTimeExecution.csv)")
     parser.add_argument("--machine", default="deCasa", help="Filtrar por nome de máquina (padrão: deCasa, use 'all' para todas)")
     parser.add_argument("--export-csv", action="store_true", help="Exportar DataFrames analisados para arquivos CSV")
     

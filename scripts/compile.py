@@ -3,11 +3,21 @@ import subprocess
 import sys
 
 def main():
-    command1 = "g++ -O3 -ffast-math -o sequencial sequencial.cpp"
-    command2 = "g++ -O3 -ffast-math -std=c++17 -o ponto_a_ponto ponto_a_ponto.cpp"
-    command3 = "g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo paralelo.cpp"
-    command4 = "g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo_collapse paralelo_collapse.cpp"
-    command5 = "g++ -O3 -o comparador comparador.cpp"
+    # Encontra a raiz do repositório (onde está a pasta src)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(script_dir) if os.path.basename(script_dir) == "scripts" else script_dir
+
+    src_dir = os.path.join(root_dir, "src")
+    if not os.path.isdir(src_dir):
+        src_dir = root_dir
+
+    cmds = [
+        f"g++ -O3 -ffast-math -o sequencial \"{os.path.join(src_dir, 'sequencial.cpp')}\"",
+        f"g++ -O3 -ffast-math -std=c++17 -o ponto_a_ponto \"{os.path.join(src_dir, 'ponto_a_ponto.cpp')}\"",
+        f"g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo \"{os.path.join(src_dir, 'paralelo.cpp')}\"",
+        f"g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo_collapse \"{os.path.join(src_dir, 'paralelo_collapse.cpp')}\"",
+        f"g++ -O3 -o comparador \"{os.path.join(src_dir, 'comparador.cpp')}\"",
+    ]
     
     # Adicionando o mingw64 ao PATH dinamicamente apenas no Windows para o g++ encontrar suas DLLs
     env = os.environ.copy()
@@ -15,19 +25,12 @@ def main():
         env["PATH"] = "C:\\msys64\\mingw64\\bin;" + env.get("PATH", "")
     
     try:
-        print(f"Executando: {command1}")
-        subprocess.run(command1, check=True, shell=True, env=env)
-        print(f"Executando: {command2}")
-        subprocess.run(command2, check=True, shell=True, env=env)
-        print(f"Executando: {command3}")
-        subprocess.run(command3, check=True, shell=True, env=env)
-        print(f"Executando: {command4}")
-        subprocess.run(command4, check=True, shell=True, env=env)
-        print(f"Executando: {command5}")
-        subprocess.run(command5, check=True, shell=True, env=env)
-        print("Compilação de todas as versões concluída com sucesso.")
+        for cmd in cmds:
+            print(f"Executando: {cmd}")
+            subprocess.run(cmd, check=True, shell=True, env=env, cwd=root_dir)
+        print("✅ Compilação de todas as versões concluída com sucesso.")
     except subprocess.CalledProcessError as e:
-        print(f"Erro durante a compilação: {e}")
+        print(f"❌ Erro durante a compilação: {e}")
         sys.exit(e.returncode)
 
 if __name__ == "__main__":

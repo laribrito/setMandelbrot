@@ -111,15 +111,19 @@ def compile_binaries():
     if sys.platform == "win32":
         env["PATH"] = "C:\\msys64\\mingw64\\bin;" + env.get("PATH", "")
 
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(script_dir) if os.path.basename(script_dir) == "scripts" else script_dir
+    src_dir = os.path.join(root_dir, "src") if os.path.isdir(os.path.join(root_dir, "src")) else root_dir
+
     cmds = [
-        ("sequencial",        "g++ -O3 -ffast-math -o sequencial sequencial.cpp"),
-        ("ponto_a_ponto",     "g++ -O3 -ffast-math -std=c++17 -o ponto_a_ponto ponto_a_ponto.cpp"),
-        ("paralelo",          "g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo paralelo.cpp"),
-        ("paralelo_collapse", "g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo_collapse paralelo_collapse.cpp"),
+        ("sequencial",        f"g++ -O3 -ffast-math -o sequencial \"{os.path.join(src_dir, 'sequencial.cpp')}\""),
+        ("ponto_a_ponto",     f"g++ -O3 -ffast-math -std=c++17 -o ponto_a_ponto \"{os.path.join(src_dir, 'ponto_a_ponto.cpp')}\""),
+        ("paralelo",          f"g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo \"{os.path.join(src_dir, 'paralelo.cpp')}\""),
+        ("paralelo_collapse", f"g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo_collapse \"{os.path.join(src_dir, 'paralelo_collapse.cpp')}\""),
     ]
     for name, cmd in cmds:
         print(f"  -> {cmd}")
-        res = subprocess.run(cmd, shell=True, env=env)
+        res = subprocess.run(cmd, shell=True, env=env, cwd=root_dir)
         if res.returncode != 0:
             print(f"❌ Erro ao compilar {name}")
             sys.exit(1)
@@ -143,8 +147,20 @@ def run_executable(executable, machine_name="deCasa", threads=None):
         return None
     return duration
 
-def load_existing_records(csv_path="dateTimeExecution.csv"):
+def get_default_csv_path():
+    """Retorna o caminho preferencial do CSV de execuções."""
+    if os.path.exists("data/dateTimeExecution.csv"):
+        return "data/dateTimeExecution.csv"
+    elif os.path.exists("dateTimeExecution.csv"):
+        return "dateTimeExecution.csv"
+    elif os.path.isdir("data"):
+        return "data/dateTimeExecution.csv"
+    return "dateTimeExecution.csv"
+
+def load_existing_records(csv_path=None):
     """Carrega todos os registros já salvos no CSV de histórico."""
+    if csv_path is None:
+        csv_path = get_default_csv_path()
     if not os.path.exists(csv_path):
         return []
     records = []
@@ -223,7 +239,8 @@ def get_existing_runs_for_test(t, records, machine_name):
     return durations
 
 def execute_battery(tests, reps, machine_name, force=False, max_out_files=6):
-    existing_records = load_existing_records("dateTimeExecution.csv") if not force else []
+    csv_path = get_default_csv_path()
+    existing_records = load_existing_records(csv_path) if not force else []
 
     # Limpeza preventiva inicial se out/ já estiver com muitos arquivos
     if max_out_files > 0:
@@ -350,7 +367,7 @@ def execute_battery(tests, reps, machine_name, force=False, max_out_files=6):
     total_time = time.time() - start_total
     print("==================================================")
     print(f"🎉 Bateria de testes concluída em {total_time/60:.2f} minutos ({total_time:.1f}s)!")
-    print(f"📊 Todos os registros detalhados estão em 'dateTimeExecution.csv'.\n")
+    print(f"📊 Todos os registros detalhados estão em '{csv_path}'.\n")
 
     # Imprime tabela resumo consolidada
     print("📋 RESUMO CONSOLIDADO (MÉDIAS):")
