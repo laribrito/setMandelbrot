@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import shutil
 import subprocess
 import time
 import argparse
@@ -26,6 +27,78 @@ SCENARIOS = {
         "MAX_ITER": 5000,
     }
 }
+
+def empty_system_trash():
+    """Limpa a lixeira do sistema (compatível com Linux e Windows)."""
+    cleaned = False
+    if sys.platform != "win32":
+        # Diretório padrão da lixeira no Linux (FreeDesktop)
+        trash_dir = os.path.expanduser("~/.local/share/Trash")
+        if os.path.exists(trash_dir):
+            for sub in ["files", "info", "expunged"]:
+                sub_path = os.path.join(trash_dir, sub)
+                if os.path.exists(sub_path):
+                    for item in os.listdir(sub_path):
+                        item_path = os.path.join(sub_path, item)
+                        try:
+                            if os.path.isdir(item_path) and not os.path.islink(item_path):
+                                shutil.rmtree(item_path, ignore_errors=True)
+                            else:
+                                os.remove(item_path)
+                            cleaned = True
+                        except Exception:
+                            pass
+        # Tenta utilitários CLI se disponíveis
+        for cmd in [["trash-empty"], ["gio", "trash", "--empty"]]:
+            try:
+                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            except FileNotFoundError:
+                pass
+    else:
+        # Windows Recycle Bin
+        try:
+            import ctypes
+            # Flags: SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND
+            flags = 0x00000001 | 0x00000002 | 0x00000004
+            ctypes.windll.shell32.SHEmptyRecycleBinW(None, None, flags)
+            cleaned = True
+        except Exception:
+            pass
+    return cleaned
+
+def clean_out_folder(out_dir="out", threshold=6):
+    """
+    Verifica a pasta 'out/'. Se atingir ou ultrapassar 'threshold' arquivos,
+    apaga todas as imagens PPM geradas e esvazia a lixeira do sistema.
+    """
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+        return
+
+    files = [f for f in os.listdir(out_dir) if os.path.isfile(os.path.join(out_dir, f))]
+    if len(files) >= threshold:
+        try:
+            total_bytes = sum(os.path.getsize(os.path.join(out_dir, f)) for f in files)
+            mb_freed = total_bytes / (1024 * 1024)
+            gb_freed = total_bytes / (1024 * 1024 * 1024)
+            size_str = f"{gb_freed:.2f} GB" if gb_freed >= 1.0 else f"{mb_freed:.1f} MB"
+        except Exception:
+            size_str = "espaço considerável"
+
+        print(f"\n   🧹 [AUTO-LIMPEZA DE DISCO] Limite atingido em '{out_dir}/' ({len(files)}/{threshold} arquivos).")
+        print(f"      -> Excluindo arquivos ({size_str}) e esvaziando lixeira do sistema...", end="", flush=True)
+
+        deleted_count = 0
+        for f in files:
+            file_path = os.path.join(out_dir, f)
+            try:
+                os.remove(file_path)
+                deleted_count += 1
+            except Exception:
+                pass
+
+        empty_system_trash()
+        print(f" Concluído! ({deleted_count} arquivos removidos)\n")
 
 def write_in_txt(params):
     with open("in.txt", "w") as f:
@@ -136,8 +209,12 @@ def get_existing_runs_for_test(t, records, machine_name):
                 pass
     return durations
 
-def execute_battery(tests, reps, machine_name, force=False):
+def execute_battery(tests, reps, machine_name, force=False, max_out_files=6):
     existing_records = load_existing_records("dateTimeExecution.csv") if not force else []
+
+    # Limpeza preventiva inicial se out/ já estiver com muitos arquivos
+    if max_out_files > 0:
+        clean_out_folder("out", threshold=max_out_files)
 
     tests_plan = []
     total_runs_needed = 0
@@ -168,6 +245,8 @@ def execute_battery(tests, reps, machine_name, force=False):
     print(f"   Repetições por config  : {reps}")
     print(f"   Execuções pendentes    : {total_runs_needed} (de {len(tests) * reps} totais)")
     print(f"   Identificador Máquina  : {machine_name}")
+    if max_out_files > 0:
+        print(f"   Gerenciador de Disco   : Limpeza a cada {max_out_files} arquivos em 'out/'")
     if force:
         print(f"   ⚠️ Modo FORCE ativado: ignorando histórico do CSV.")
     print(f"==================================================\n")
@@ -230,6 +309,10 @@ def execute_battery(tests, reps, machine_name, force=False):
                 print(f"OK ({d:.2f}s)")
             else:
                 print("FALHOU")
+
+            # Checa o espaço em disco após cada repetição
+            if max_out_files > 0:
+                clean_out_folder("out", threshold=max_out_files)
 
         all_durations = existing_times + new_durations
         avg_t = (sum(all_durations) / len(all_durations)) if all_durations else 0.0
@@ -338,6 +421,8 @@ def main():
     parser.add_argument("--machine", default="deCasa", help="Nome da máquina para o CSV (padrão: deCasa)")
     parser.add_argument("--force", "-f", action="store_true",
                         help="Forçar a execução de todos os testes ignorando o histórico prévio")
+    parser.add_argument("--max-out-files", type=int, default=6,
+                        help="Limite de arquivos na pasta out antes de auto-limpeza e esvaziamento da lixeira (padrão: 6, use 0 para desativar)")
 
     args = parser.parse_args()
 
@@ -346,7 +431,7 @@ def main():
         if not args.no_compile:
             compile_binaries()
         tests = build_test_list("all", args.scenarios, args.sizes, args.schedules)
-        execute_battery(tests, args.reps, args.machine, force=args.force)
+        execute_battery(tests, args.reps, args.machine, force=args.force, max_out_files=args.max_out_files)
         return
 
     # Se nenhum argumento de modo for passado pela CLI, abre o menu interativo
@@ -378,14 +463,14 @@ def main():
         if not args.no_compile:
             compile_binaries()
         tests = build_test_list(mode, args.scenarios, sizes, args.schedules)
-        execute_battery(tests, reps, args.machine, force=args.force)
+        execute_battery(tests, reps, args.machine, force=args.force, max_out_files=args.max_out_files)
         return
 
     # Execução via argumentos de linha de comando
     if not args.no_compile:
         compile_binaries()
     tests = build_test_list(args.mode, args.scenarios, args.sizes, args.schedules)
-    execute_battery(tests, args.reps, args.machine, force=args.force)
+    execute_battery(tests, args.reps, args.machine, force=args.force, max_out_files=args.max_out_files)
 
 if __name__ == "__main__":
     main()
