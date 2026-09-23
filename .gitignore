@@ -6,3 +6,6 @@ ponto_a_ponto
 paralelo
 paralelo_collapse
 comparador
+.venv/
+__pycache__/
+*.pyc
