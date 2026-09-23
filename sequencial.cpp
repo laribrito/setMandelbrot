@@ -241,10 +241,10 @@ int main() {
         if (!machineName) machineName = "Unknown";
 
         if (isNewFile) {
-            csvFile << "DataHora,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code\n";
+            csvFile << "DataHora,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code,Schedule,ChunkSize,Threads\n";
         }
         
-        // Formato: YYYY-MM-DD HH:MM:SS,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code
+        // Formato: YYYY-MM-DD HH:MM:SS,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code,Schedule,ChunkSize,Threads
         csvFile << std::put_time(std::localtime(&current_time), "%Y-%m-%d %H:%M:%S") 
                 << "," << elapsed.count()
                 << "," << WIDTH
@@ -255,7 +255,7 @@ int main() {
                 << "," << IM_MIN
                 << "," << IM_MAX 
                 << "," << machineName 
-                << ",sequencial\n";
+                << ",sequencial,N/A,N/A,1\n";
         csvFile.close();
         
         std::cout << "Execução finalizada!\n";

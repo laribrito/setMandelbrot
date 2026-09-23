@@ -205,7 +205,7 @@ int main() {
         if (!machineName) machineName = "Unknown";
 
         if (isNewFile) {
-            csvFile << "DataHora,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code\n";
+            csvFile << "DataHora,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code,Schedule,ChunkSize,Threads\n";
         }
         
         csvFile << std::put_time(std::localtime(&current_time), "%Y-%m-%d %H:%M:%S") 
@@ -218,7 +218,8 @@ int main() {
                 << "," << IM_MIN
                 << "," << IM_MAX 
                 << "," << machineName 
-                << ",ponto_a_ponto\n";
+                << ",ponto_a_ponto"
+                << ",N/A,N/A,1\n";
         csvFile.close();
         
         std::cout << "Execução Ponto a Ponto finalizada!\n";
