@@ -87,9 +87,17 @@ int main() {
     double tamPixel_re = (RE_MAX - RE_MIN)/WIDTH,
            tamPixel_im = (IM_MAX - IM_MIN)/HEIGHT;
 
+    // Garante caminho padronizado da base de dados com fallback
+    std::string csvPath = "data/dateTimeExecution.csv";
+    if (!std::filesystem::exists("data/dateTimeExecution.csv") && std::filesystem::exists("dateTimeExecution.csv")) {
+        csvPath = "dateTimeExecution.csv";
+    } else {
+        std::filesystem::create_directories("data");
+    }
+
     // Determina o número da execução atual com base nas linhas registradas no CSV
     int executionNum = 1;
-    std::ifstream checkFile("dateTimeExecution.csv");
+    std::ifstream checkFile(csvPath);
     if (checkFile.is_open()) {
         std::string line;
         while (std::getline(checkFile, line)) {
@@ -192,13 +200,13 @@ int main() {
 
     bool isNewFile = false;
     {
-        std::ifstream testFile("dateTimeExecution.csv");
+        std::ifstream testFile(csvPath);
         if (!testFile || testFile.peek() == std::ifstream::traits_type::eof()) {
             isNewFile = true;
         }
     }
 
-    std::ofstream csvFile("dateTimeExecution.csv", std::ios::app);
+    std::ofstream csvFile(csvPath, std::ios::app);
     if (csvFile.is_open()) {
         const char* machineName = std::getenv("COMPUTERNAME");
         if (!machineName) machineName = std::getenv("HOSTNAME");
@@ -224,7 +232,7 @@ int main() {
         
         std::cout << "Execução Ponto a Ponto finalizada!\n";
         std::cout << "Tempo gasto (puro processamento): " << elapsed.count() << " segundos.\n";
-        std::cout << "Registro salvo em 'dateTimeExecution.csv'\n";
+        std::cout << "Registro salvo em '" << csvPath << "'\n";
     }
 
     return 0;

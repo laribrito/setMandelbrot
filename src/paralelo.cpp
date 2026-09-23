@@ -112,9 +112,17 @@ int main() {
     double tamPixel_re = (RE_MAX - RE_MIN) / WIDTH,
            tamPixel_im = (IM_MAX - IM_MIN) / HEIGHT;
 
+    // Garante caminho padronizado da base de dados com fallback
+    std::string csvPath = "data/dateTimeExecution.csv";
+    if (!std::filesystem::exists("data/dateTimeExecution.csv") && std::filesystem::exists("dateTimeExecution.csv")) {
+        csvPath = "dateTimeExecution.csv";
+    } else {
+        std::filesystem::create_directories("data");
+    }
+
     // Determina o número da execução atual com base nas linhas registradas no CSV
     int executionNum = 1;
-    std::ifstream checkFile("dateTimeExecution.csv");
+    std::ifstream checkFile(csvPath);
     if (checkFile.is_open()) {
         std::string line;
         while (std::getline(checkFile, line)) {
@@ -126,20 +134,18 @@ int main() {
     // Aloca a matriz completa para toda a imagem
     std::vector<int> temps(HEIGHT * WIDTH, 0);
 
-    std::cout << "Iniciando [collapse(2)] com schedule=" << schedName
+    std::cout << "Iniciando com schedule=" << schedName
               << " chunk=" << chunkSize
               << " threads=" << omp_get_max_threads() << "\n";
 
     // Começa a marcar o tempo
     auto start = std::chrono::high_resolution_clock::now();
 
-    // Loop paralelo com collapse(2): funde os dois loops em um único espaço
-    // de iteração de HEIGHT*WIDTH pixels, distribuindo pixels individuais
-    // entre as threads. Chunk size agora é em pixels, não em linhas.
-    #pragma omp parallel for collapse(2) schedule(runtime) shared(temps)
+    // Loop paralelo com OpenMP — escalonamento definido em runtime via omp_set_schedule()
+    #pragma omp parallel for schedule(runtime) shared(temps)
     for (int j = 0; j < HEIGHT; ++j) {
+        double y = IM_MAX - j * tamPixel_im;
         for (int i = 0; i < WIDTH; ++i) {
-            double y = IM_MAX - j * tamPixel_im;
             double x = RE_MIN + i * tamPixel_re;
             Complex c(x, y);
             Complex z = 0;
@@ -164,7 +170,7 @@ int main() {
     std::filesystem::create_directories("out");
 
     // Prefixo dos arquivos inclui o modo de escalonamento
-    std::string prefix = "out/mandelbrot_col_" + schedName + "_" + std::to_string(executionNum);
+    std::string prefix = "out/mandelbrot_par_" + schedName + "_" + std::to_string(executionNum);
 
     std::string tableFilename = prefix + "_table.ppm";
     std::ofstream tableFile(tableFilename);
@@ -223,13 +229,13 @@ int main() {
 
     bool isNewFile = false;
     {
-        std::ifstream testFile("dateTimeExecution.csv");
+        std::ifstream testFile(csvPath);
         if (!testFile || testFile.peek() == std::ifstream::traits_type::eof()) {
             isNewFile = true;
         }
     }
 
-    std::ofstream csvFile("dateTimeExecution.csv", std::ios::app);
+    std::ofstream csvFile(csvPath, std::ios::app);
     if (csvFile.is_open()) {
         const char* machineName = std::getenv("COMPUTERNAME");
         if (!machineName) machineName = std::getenv("HOSTNAME");
@@ -249,18 +255,18 @@ int main() {
                 << "," << IM_MIN
                 << "," << IM_MAX
                 << "," << machineName
-                << ",paralelo_collapse"
+                << ",paralelo"
                 << "," << schedName
                 << "," << chunkSize
                 << "," << omp_get_max_threads()
                 << "\n";
         csvFile.close();
 
-        std::cout << "Execucao Paralela Collapse(2) (OpenMP) finalizada!\n";
+        std::cout << "Execucao Paralela (OpenMP) finalizada!\n";
         std::cout << "Schedule: " << schedName << "  Chunk: " << chunkSize
                   << "  Threads: " << omp_get_max_threads() << "\n";
         std::cout << "Tempo gasto (puro processamento): " << elapsed.count() << " segundos.\n";
-        std::cout << "Registro salvo em 'dateTimeExecution.csv'\n";
+        std::cout << "Registro salvo em '" << csvPath << "'\n";
     }
 
     return 0;
