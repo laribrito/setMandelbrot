@@ -8,6 +8,12 @@
 #include <cstdlib>
 #include <filesystem>
 
+// ==============================================================================
+// Identificador da Etapa do Projeto a que este código pertence
+// Use 1 para Etapa 1 (data/etapa1/), 2 para Etapa 2 (data/etapa2/), etc.
+// ==============================================================================
+const int ETAPA = 1;
+
 class Complex {
 public:
     double real;
@@ -59,6 +65,7 @@ int main() {
     // Parâmetros padrão
     int WIDTH = 4096, HEIGHT = 4096, MAX_ITER = 1000;
     double RE_MIN = -2.0, RE_MAX = 1.0, IM_MIN = -1.5, IM_MAX = 1.5;
+    int etapaAtual = ETAPA;
 
     std::ifstream inFile("in.txt");
     if (inFile.is_open()) {
@@ -77,6 +84,7 @@ int main() {
                 else if (key == "RE_MAX") RE_MAX = std::stod(value);
                 else if (key == "IM_MIN") IM_MIN = std::stod(value);
                 else if (key == "IM_MAX") IM_MAX = std::stod(value);
+                else if (key == "ETAPA")  etapaAtual = std::stoi(value);
             }
         }
         inFile.close();
@@ -87,13 +95,10 @@ int main() {
     double tamPixel_re = (RE_MAX - RE_MIN)/WIDTH,
            tamPixel_im = (IM_MAX - IM_MIN)/HEIGHT;
 
-    // Garante caminho padronizado da base de dados com fallback
-    std::string csvPath = "data/dateTimeExecution.csv";
-    if (!std::filesystem::exists("data/dateTimeExecution.csv") && std::filesystem::exists("dateTimeExecution.csv")) {
-        csvPath = "dateTimeExecution.csv";
-    } else {
-        std::filesystem::create_directories("data");
-    }
+    // Garante caminho padronizado da base de dados com base na etapa configurada
+    std::string etapaFolder = "data/etapa" + std::to_string(etapaAtual);
+    std::filesystem::create_directories(etapaFolder);
+    std::string csvPath = etapaFolder + "/dateTimeExecution.csv";
 
     // Determina o número da execução atual com base nas linhas registradas no CSV
     int executionNum = 1;
