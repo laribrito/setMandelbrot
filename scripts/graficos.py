@@ -223,8 +223,14 @@ def gerar_tipo3_metricas(df, cenario_info, dir_png, dir_pdf, pdf_pages=None):
     if sub_all.empty:
         return
 
-    # Baseline T1
-    t_seq = sub_all[sub_all['Code'].isin(['sequencial', 'ponto_a_ponto'])]['TempoGasto'].mean()
+    # Baseline T1: utiliza estritamente ponto_a_ponto (carga completa de trabalho 1-thread)
+    pap_sub = sub_all[sub_all['Code'] == 'ponto_a_ponto']
+    if not pap_sub.empty:
+        t_seq = pap_sub['TempoGasto'].mean()
+    elif 'T1' in sub_all.columns and not pd.isna(sub_all['T1'].iloc[0]):
+        t_seq = sub_all['T1'].iloc[0]
+    else:
+        t_seq = sub_all[sub_all['Code'] == 'sequencial']['TempoGasto'].mean()
 
     estrategias = [
         {'code': 'paralelo_collapse', 'sched': 'dynamic', 'chunk': 1024, 'label': 'Collapse - Dynamic (1024)', 'color': '#10b981', 'marker': 'o'},
@@ -301,6 +307,133 @@ def gerar_tipo3_metricas(df, cenario_info, dir_png, dir_pdf, pdf_pages=None):
 
 
 # ==============================================================================
+# TIPO 4: COMPARAÇÃO DE ESCALONAMENTOS AO LONGO DAS RESOLUÇÕES (4K, 8K, 16K)
+# ==============================================================================
+def gerar_tipo4_schedules_multi_res(df, sc_name, tag, title_desc, dir_png, dir_pdf, pdf_pages=None):
+    """
+    Gera painel comparativo 1x3 com as políticas de escalonamento lado a lado
+    ao longo das três resoluções (4096, 8192, 16384) para um determinado cenário.
+    """
+    sub_sc = df[(df['Scenario'] == sc_name) & (df['Threads'] == 4) & (df['Code'] == 'paralelo_collapse')].copy()
+    if sub_sc.empty:
+        sub_sc = df[(df['Scenario'] == sc_name) & (df['Threads'] == 4) & (df['Code'] == 'paralelo')].copy()
+    if sub_sc.empty:
+        return
+
+    sub_sc['Config'] = sub_sc['Schedule'].str.capitalize() + " (chunk=" + sub_sc['ChunkSize'].astype(str) + ")"
+
+    widths = [4096, 8192, 16384]
+    res_titles = ['4096×4096 (4K)', '8192×8192 (8K)', '16384×16384 (16K)']
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5.8), sharey=True)
+    fig.suptitle(f'Comparação das Políticas de Escalonamento ao Longo das Resoluções (4 Threads)\n{title_desc}',
+                 fontsize=13, fontweight='bold', y=1.02)
+
+    for ax, w, res_t in zip(axes, widths, res_titles):
+        sub_w = sub_sc[sub_sc['WIDTH'] == w].copy()
+        if sub_w.empty:
+            continue
+
+        agg = sub_w.groupby(['Schedule', 'Config']).agg(
+            Tempo_Medio=('TempoGasto', 'mean'),
+            Speedup_Medio=('Speedup', 'mean')
+        ).reset_index().sort_values('Tempo_Medio', ascending=False)
+
+        colors = [CORES_SCHEDULE.get(s, '#3b82f6') for s in agg['Schedule']]
+        bars = ax.barh(agg['Config'], agg['Tempo_Medio'], color=colors, height=0.62, edgecolor='#1e293b', alpha=0.9)
+
+        max_val = agg['Tempo_Medio'].max()
+        for bar, speedup in zip(bars, agg['Speedup_Medio']):
+            width = bar.get_width()
+            ax.text(width + (max_val * 0.02), bar.get_y() + bar.get_height()/2,
+                    f"{width:.2f}s ({speedup:.2f}x)",
+                    ha='left', va='center', fontsize=8.5, fontweight='bold', color='#1e293b')
+
+        ax.set_title(res_t, fontsize=11, fontweight='bold', pad=8)
+        ax.set_xlabel('Tempo Médio (s)', fontsize=10)
+        ax.set_xlim(0, max_val * 1.40)
+        ax.grid(axis='x', alpha=0.6)
+
+    # Legenda global
+    legend_elements = [
+        Patch(facecolor=CORES_SCHEDULE['dynamic'], label='Dynamic (Balanceamento Dinâmico)'),
+        Patch(facecolor=CORES_SCHEDULE['guided'], label='Guided (Granularidade Decrescente)'),
+        Patch(facecolor=CORES_SCHEDULE['static'], label='Static (Divisão Estática)'),
+        Patch(facecolor=CORES_SCHEDULE['auto'], label='Auto (OpenMP Default)')
+    ]
+    fig.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.99, 0.98), ncol=4, fontsize=9, framealpha=0.95)
+    plt.tight_layout()
+
+    salvar_figura(fig, f"tipo4_comparacao_escalonamento_resolucoes_{tag}", dir_png, dir_pdf, pdf_pages)
+
+
+# ==============================================================================
+# TIPO 5: ESCALABILIDADE DO TEMPO DE EXECUÇÃO EM FUNÇÃO DA RESOLUÇÃO (4K -> 8K -> 16K)
+# ==============================================================================
+def gerar_tipo5_escalabilidade_resolucao(df, dir_png, dir_pdf, pdf_pages=None):
+    """
+    Gera painel com a escalabilidade do tempo de execução em função do aumento
+    da resolução da imagem (4096 -> 8192 -> 16384) para Visão Completa e Zoom.
+    """
+    scenarios = [
+        {'name': 'Visão Completa', 'desc': 'Visão Completa (Max Iter: 1000)', 'tag': 'visao_completa'},
+        {'name': 'Zoom (Seahorse)', 'desc': 'Zoom - Seahorse (Max Iter: 5000)', 'tag': 'zoom_seahorse'}
+    ]
+
+    fig, axes = plt.subplots(1, 2, figsize=(15, 5.5))
+    fig.suptitle('Escalabilidade do Tempo de Execução em Função da Resolução da Imagem (4K → 8K → 16K)',
+                 fontsize=13, fontweight='bold', y=1.02)
+
+    x_labels = ['4K\n(4096×4096)', '8K\n(8192×8192)', '16K\n(16384×16384)']
+    x_positions = [1, 2, 3]
+
+    estrategias = [
+        {'code': 'ponto_a_ponto', 'sched': None, 'chunk': None, 'threads': 1, 'label': '1 Thread (Ponto a Ponto - Base)', 'color': '#64748b', 'marker': 'D', 'ls': '--'},
+        {'code': 'paralelo_collapse', 'sched': 'dynamic', 'chunk': 1024, 'threads': 4, 'label': 'Collapse - Dynamic (1024)', 'color': '#10b981', 'marker': 'o', 'ls': '-'},
+        {'code': 'paralelo_collapse', 'sched': 'guided', 'chunk': 1024, 'threads': 4, 'label': 'Collapse - Guided (1024)', 'color': '#8b5cf6', 'marker': 'v', 'ls': '-'},
+        {'code': 'paralelo', 'sched': 'dynamic', 'chunk': 64, 'threads': 4, 'label': '1D - Dynamic (64)', 'color': '#06b6d4', 'marker': '^', 'ls': '-'},
+        {'code': 'paralelo', 'sched': 'static', 'chunk': 64, 'threads': 4, 'label': '1D - Static (64)', 'color': '#ef4444', 'marker': 's', 'ls': '-'},
+    ]
+
+    for ax, sc in zip(axes, scenarios):
+        sub_sc = df[df['Scenario'] == sc['name']].copy()
+        
+        for est in estrategias:
+            tempos = []
+            valid = True
+            for w in [4096, 8192, 16384]:
+                if est['code'] == 'ponto_a_ponto':
+                    cond = (sub_sc['WIDTH'] == w) & (sub_sc['Code'] == 'ponto_a_ponto')
+                else:
+                    cond = (sub_sc['WIDTH'] == w) & (sub_sc['Code'] == est['code']) & (sub_sc['Schedule'] == est['sched']) & (sub_sc['ChunkSize'] == est['chunk']) & (sub_sc['Threads'] == est['threads'])
+                
+                match = sub_sc[cond]
+                if match.empty:
+                    valid = False
+                    break
+                tempos.append(match['TempoGasto'].mean())
+
+            if valid and len(tempos) == 3:
+                ax.plot(x_positions, tempos, marker=est['marker'], color=est['color'],
+                        linestyle=est['ls'], label=est['label'], linewidth=2.0, markersize=7)
+                for x, t in zip(x_positions, tempos):
+                    ax.annotate(f"{t:.1f}s", (x, t), textcoords="offset points",
+                                xytext=(6, 4 if est['code']=='ponto_a_ponto' else -10),
+                                fontsize=8, fontweight='bold', color=est['color'])
+
+        ax.set_title(sc['desc'], fontsize=11.5, fontweight='bold')
+        ax.set_xlabel('Resolução da Imagem', fontsize=10.5)
+        ax.set_ylabel('Tempo de Execução Médio (segundos)', fontsize=10.5)
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(x_labels)
+        ax.grid(True)
+        ax.legend(loc='upper left', fontsize=8.5)
+
+    plt.tight_layout()
+    salvar_figura(fig, "tipo5_escalabilidade_resolucao", dir_png, dir_pdf, pdf_pages)
+
+
+# ==============================================================================
 # EXECUÇÃO PRINCIPAL - EXPORTAÇÃO COMPLETA (PNG + PDF INDIVIDUAL + RELATÓRIO PDF)
 # ==============================================================================
 def gerar_todos_graficos():
@@ -325,6 +458,7 @@ def gerar_todos_graficos():
     print(f"📑 Relatório PDF Consolidado: {relatorio_pdf_path}\n")
 
     with PdfPages(relatorio_pdf_path) as pdf_multipage:
+        # 1. Gráficos individuais por cenário e resolução (Tipos 1, 2 e 3)
         for i, cenario in enumerate(CENARIOS_LISTA, 1):
             print(f"--- [Cenário {i}/6] {cenario['desc']} ---")
             # Tipo 1: Escalonamentos
@@ -335,11 +469,28 @@ def gerar_todos_graficos():
             gerar_tipo3_metricas(df, cenario, dir_png, dir_pdf, pdf_multipage)
             print()
 
+        # 2. Gráficos consolidados longitudinais (Tipo 4: Comparação ao longo das resoluções)
+        print("--- [Consolidado] Tipo 4: Escalonamentos ao Longo das Resoluções ---")
+        gerar_tipo4_schedules_multi_res(
+            df, 'Visão Completa', 'visao_completa',
+            'Visão Completa (Max Iter: 1000)', dir_png, dir_pdf, pdf_multipage
+        )
+        gerar_tipo4_schedules_multi_res(
+            df, 'Zoom (Seahorse)', 'zoom_seahorse',
+            'Zoom - Seahorse (Max Iter: 5000)', dir_png, dir_pdf, pdf_multipage
+        )
+        print()
+
+        # 3. Gráfico de escalabilidade em função da resolução (Tipo 5: 4K -> 8K -> 16K)
+        print("--- [Consolidado] Tipo 5: Escalabilidade em Função da Resolução (4K → 8K → 16K) ---")
+        gerar_tipo5_escalabilidade_resolucao(df, dir_png, dir_pdf, pdf_multipage)
+        print()
+
     print("=" * 80)
     print("🎉 Exportação concluída com sucesso!")
-    print(f"  ✅ 18 PDFs individuais em '{dir_pdf}/'")
-    print(f"  ✅ 18 PNGs individuais em '{dir_png}/'")
-    print(f"  ✅ 1 Relatório PDF completo em '{relatorio_pdf_path}'")
+    print(f"  ✅ PDFs individuais em '{dir_pdf}/'")
+    print(f"  ✅ PNGs individuais em '{dir_png}/'")
+    print(f"  ✅ Relatório PDF completo em '{relatorio_pdf_path}'")
     print("=" * 80)
 
 
