@@ -8,6 +8,13 @@ import argparse
 import csv
 import math
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # Configurações de regiões do Mandelbrot
 SCENARIOS = {
     "full": {
@@ -147,15 +154,20 @@ def run_executable(executable, machine_name="deCasa", threads=None):
         return None
     return duration
 
-def get_default_csv_path():
-    """Retorna o caminho preferencial do CSV de execuções."""
-    if os.path.exists("data/dateTimeExecution.csv"):
-        return "data/dateTimeExecution.csv"
-    elif os.path.exists("dateTimeExecution.csv"):
-        return "dateTimeExecution.csv"
-    elif os.path.isdir("data"):
-        return "data/dateTimeExecution.csv"
-    return "dateTimeExecution.csv"
+def get_default_csv_path(etapa=None):
+    """Retorna o caminho preferencial do CSV de execuções com base na etapa."""
+    if etapa is not None:
+        return os.path.normpath(f"data/etapa{etapa}/dateTimeExecution.csv")
+    candidates = [
+        "data/etapa2/dateTimeExecution.csv",
+        "data/etapa1/dateTimeExecution.csv",
+        "data/dateTimeExecution.csv",
+        "dateTimeExecution.csv",
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.normpath(c)
+    return os.path.normpath("data/etapa2/dateTimeExecution.csv")
 
 def load_existing_records(csv_path=None):
     """Carrega todos os registros já salvos no CSV de histórico."""
@@ -238,8 +250,8 @@ def get_existing_runs_for_test(t, records, machine_name):
                 pass
     return durations
 
-def execute_battery(tests, reps, machine_name, force=False, max_out_files=6):
-    csv_path = get_default_csv_path()
+def execute_battery(tests, reps, machine_name, force=False, max_out_files=6, etapa=2):
+    csv_path = get_default_csv_path(etapa=etapa)
     existing_records = load_existing_records(csv_path) if not force else []
 
     # Limpeza preventiva inicial se out/ já estiver com muitos arquivos
@@ -328,7 +340,8 @@ def execute_battery(tests, reps, machine_name, force=False, max_out_files=6):
             "IM_MAX": t["IM_MAX"],
             "SCHEDULE": t["SCHEDULE"],
             "CHUNK_SIZE": t["CHUNK_SIZE"],
-            "THREADS": t.get("THREADS", 1)
+            "THREADS": t.get("THREADS", 1),
+            "ETAPA": etapa
         })
 
         new_durations = []
@@ -468,9 +481,9 @@ def build_test_list(mode, scenarios, sizes, schedules, threads=4):
                     })
     return tests
 
-def show_interactive_menu():
+def show_interactive_menu(etapa=2):
     print("\n=======================================================")
-    print("        ⚙️  AUTOMATIZADOR DE TESTES MANDELBROT         ")
+    print(f"   ⚙️  AUTOMATIZADOR DE TESTES MANDELBROT (ETAPA {etapa})   ")
     print("=======================================================")
     print(" Escolha uma opção para executar:")
     print("  [1] 🚀 RODAR TUDO UM APÓS O OUTRO (Ponto a Ponto + Paralelo + Collapse)")
@@ -506,6 +519,8 @@ def main():
                         help="Forçar a execução de todos os testes ignorando o histórico prévio")
     parser.add_argument("--max-out-files", type=int, default=6,
                         help="Limite de arquivos na pasta out antes de auto-limpeza e esvaziamento da lixeira (padrão: 6, use 0 para desativar)")
+    parser.add_argument("--etapa", type=int, default=2,
+                        help="Etapa do projeto a ser executada/registrada (padrão: 2)")
 
     args = parser.parse_args()
 
@@ -514,12 +529,12 @@ def main():
         if not args.no_compile:
             compile_binaries()
         tests = build_test_list("all", args.scenarios, args.sizes, args.schedules, threads=args.threads)
-        execute_battery(tests, args.reps, args.machine, force=args.force, max_out_files=args.max_out_files)
+        execute_battery(tests, args.reps, args.machine, force=args.force, max_out_files=args.max_out_files, etapa=args.etapa)
         return
 
     # Se nenhum argumento de modo for passado pela CLI, abre o menu interativo
     if args.mode is None:
-        choice = show_interactive_menu()
+        choice = show_interactive_menu(etapa=args.etapa)
         if choice == "1":
             mode = "all"
             sizes = [4096, 8192, 16384]
@@ -550,14 +565,14 @@ def main():
         if not args.no_compile:
             compile_binaries()
         tests = build_test_list(mode, args.scenarios, sizes, args.schedules, threads=args.threads)
-        execute_battery(tests, reps, args.machine, force=args.force, max_out_files=args.max_out_files)
+        execute_battery(tests, reps, args.machine, force=args.force, max_out_files=args.max_out_files, etapa=args.etapa)
         return
 
     # Execução via argumentos de linha de comando
     if not args.no_compile:
         compile_binaries()
     tests = build_test_list(args.mode, args.scenarios, args.sizes, args.schedules, threads=args.threads)
-    execute_battery(tests, args.reps, args.machine, force=args.force, max_out_files=args.max_out_files)
+    execute_battery(tests, args.reps, args.machine, force=args.force, max_out_files=args.max_out_files, etapa=args.etapa)
 
 if __name__ == "__main__":
     main()

@@ -10,33 +10,48 @@ import argparse
 import pandas as pd
 import numpy as np
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # Configurações padrão de exibição do Pandas
 pd.set_option('display.max_columns', 15)
 pd.set_option('display.width', 1000)
 pd.set_option('display.float_format', lambda x: f'{x:.3f}')
 
 
-def resolve_csv_path(csv_path: str = None) -> str:
+def resolve_csv_path(csv_path: str = None, etapa: int = None) -> str:
     """Encontra o caminho do arquivo CSV no repositório."""
     if csv_path and os.path.exists(csv_path):
         return csv_path
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(script_dir) if os.path.basename(script_dir) == "scripts" else script_dir
+
+    if etapa is not None:
+        etapa_csv = os.path.join(root_dir, "data", f"etapa{etapa}", "dateTimeExecution.csv")
+        return os.path.normpath(etapa_csv)
+
     candidates = [
         csv_path,
+        os.path.join(root_dir, "data", "etapa2", "dateTimeExecution.csv"),
+        os.path.join(root_dir, "data", "etapa1", "dateTimeExecution.csv"),
+        os.path.join(root_dir, "data", "dateTimeExecution.csv"),
         "data/dateTimeExecution.csv",
         "dateTimeExecution.csv",
-        os.path.join(script_dir, "..", "data", "dateTimeExecution.csv"),
         os.path.join(script_dir, "dateTimeExecution.csv"),
     ]
     for c in candidates:
         if c and os.path.exists(c):
             return os.path.normpath(c)
-    return "data/dateTimeExecution.csv"
+    return os.path.normpath(os.path.join(root_dir, "data", "etapa2", "dateTimeExecution.csv"))
 
 
-def load_dataset(csv_path: str = None) -> pd.DataFrame:
+def load_dataset(csv_path: str = None, etapa: int = None) -> pd.DataFrame:
     """Carrega o arquivo CSV de execuções em um Pandas DataFrame e padroniza os tipos."""
-    resolved_path = resolve_csv_path(csv_path)
+    resolved_path = resolve_csv_path(csv_path, etapa=etapa)
     try:
         df = pd.read_csv(resolved_path)
     except FileNotFoundError:
@@ -239,14 +254,14 @@ def print_separator(title: str = "", char: str = "=", width: int = 100):
         print(char * width)
 
 
-def run_full_analysis(csv_path: str = None, machine: str = "deCasa", export_csv: bool = False):
+def run_full_analysis(csv_path: str = None, machine: str = "deCasa", export_csv: bool = False, etapa: int = None):
     """Executa a bateria completa de análises em DataFrames e imprime um relatório estruturado."""
     print("\n" + "=" * 100)
     print(" 📊 SUÍTE DE ANÁLISE DE DESEMPENHO PARALELO - MANDELBROT OPENMP (PANDAS)")
     print("=" * 100)
 
     # 1. Carregamento e Enriquecimento
-    resolved_path = resolve_csv_path(csv_path)
+    resolved_path = resolve_csv_path(csv_path, etapa=etapa)
     df_raw = load_dataset(resolved_path)
     total_execucoes_total = len(df_raw)
     
@@ -310,7 +325,11 @@ def run_full_analysis(csv_path: str = None, machine: str = "deCasa", export_csv:
     if export_csv:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         root_dir = os.path.dirname(script_dir) if os.path.basename(script_dir) == "scripts" else script_dir
-        out_dir = os.path.join(root_dir, "data")
+        if etapa is not None:
+            out_dir = os.path.join(root_dir, "data", f"etapa{etapa}")
+        else:
+            parent_dir = os.path.dirname(os.path.abspath(resolved_path))
+            out_dir = parent_dir if os.path.exists(parent_dir) else os.path.join(root_dir, "data")
         os.makedirs(out_dir, exist_ok=True)
 
         best_configs.to_csv(os.path.join(out_dir, "analise_melhores_configs.csv"), index=False)
@@ -329,12 +348,13 @@ def run_full_analysis(csv_path: str = None, machine: str = "deCasa", export_csv:
 
 def main():
     parser = argparse.ArgumentParser(description="Análise de Métricas e Desempenho Paralelo (Mandelbrot)")
-    parser.add_argument("--csv", default=None, help="Caminho do arquivo CSV de execuções (padrão: data/dateTimeExecution.csv)")
+    parser.add_argument("--etapa", type=int, default=2, help="Número da etapa do projeto (padrão: 2)")
+    parser.add_argument("--csv", default=None, help="Caminho direto para o CSV de execuções (sobrescreve --etapa)")
     parser.add_argument("--machine", default="deCasa", help="Filtrar por nome de máquina (padrão: deCasa, use 'all' para todas)")
     parser.add_argument("--export-csv", action="store_true", help="Exportar DataFrames analisados para arquivos CSV")
     
     args = parser.parse_args()
-    run_full_analysis(csv_path=args.csv, machine=args.machine, export_csv=args.export_csv)
+    run_full_analysis(csv_path=args.csv, machine=args.machine, export_csv=args.export_csv, etapa=args.etapa)
 
 
 if __name__ == "__main__":

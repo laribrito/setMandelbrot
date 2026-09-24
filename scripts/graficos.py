@@ -6,12 +6,21 @@ além de gerar um relatório PDF consolidado multi-páginas (relatorio_graficos_
 """
 
 import os
+import sys
+import argparse
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import pandas as pd
 from metricas import load_dataset, calculate_metrics
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 # Estilo visual moderno e limpo
 plt.rcParams['font.family'] = 'sans-serif'
@@ -76,9 +85,9 @@ CENARIOS_LISTA = [
 ]
 
 
-def carregar_dados(csv_path=None, machine="deCasa"):
+def carregar_dados(csv_path=None, machine="deCasa", etapa=None):
     """Carrega dataset e calcula métricas isolando 1 e 4 threads."""
-    df_raw = load_dataset(csv_path)
+    df_raw = load_dataset(csv_path, etapa=etapa)
     if machine and machine.lower() != 'all':
         df_raw = df_raw[df_raw['Machine'] == machine].copy()
     
@@ -436,14 +445,19 @@ def gerar_tipo5_escalabilidade_resolucao(df, dir_png, dir_pdf, pdf_pages=None):
 # ==============================================================================
 # EXECUÇÃO PRINCIPAL - EXPORTAÇÃO COMPLETA (PNG + PDF INDIVIDUAL + RELATÓRIO PDF)
 # ==============================================================================
-def gerar_todos_graficos():
+def gerar_todos_graficos(etapa=2, machine="deCasa", csv_path=None):
     print("=" * 80)
-    print(" 🎨 EXPORTANDO GRÁFICOS EM PDF E PNG (MANDELBROT OPENMP)")
+    etapa_str = f" - ETAPA {etapa}" if etapa is not None else ""
+    print(f" 🎨 EXPORTANDO GRÁFICOS EM PDF E PNG (MANDELBROT OPENMP{etapa_str})")
     print("=" * 80)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.dirname(script_dir) if os.path.basename(script_dir) == "scripts" else script_dir
-    relatorios_dir = os.path.join(root_dir, "relatorios")
+    
+    if etapa is not None:
+        relatorios_dir = os.path.join(root_dir, "relatorios", f"etapa{etapa}")
+    else:
+        relatorios_dir = os.path.join(root_dir, "relatorios")
 
     dir_png = os.path.join(relatorios_dir, "png")
     dir_pdf = os.path.join(relatorios_dir, "pdf")
@@ -451,7 +465,7 @@ def gerar_todos_graficos():
     os.makedirs(dir_pdf, exist_ok=True)
 
     relatorio_pdf_path = os.path.join(relatorios_dir, "relatorio_graficos_mandelbrot.pdf")
-    df = carregar_dados()
+    df = carregar_dados(csv_path=csv_path, machine=machine, etapa=etapa)
 
     print(f"\n📁 Diretório PNG: {dir_png}")
     print(f"📁 Diretório PDF: {dir_pdf}")
@@ -495,4 +509,9 @@ def gerar_todos_graficos():
 
 
 if __name__ == "__main__":
-    gerar_todos_graficos()
+    parser = argparse.ArgumentParser(description="Geração e Exportação de Gráficos de Desempenho Paralelo")
+    parser.add_argument("--etapa", type=int, default=2, help="Etapa do projeto a gerar gráficos (padrão: 2)")
+    parser.add_argument("--csv", default=None, help="Caminho direto para o CSV de execuções (sobrescreve --etapa)")
+    parser.add_argument("--machine", default="deCasa", help="Filtrar por nome de máquina (padrão: deCasa, use 'all' para todas)")
+    args = parser.parse_args()
+    gerar_todos_graficos(etapa=args.etapa, machine=args.machine, csv_path=args.csv)
