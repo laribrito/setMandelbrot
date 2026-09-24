@@ -28,9 +28,9 @@ def main():
         for cmd in cmds:
             print(f"Executando: {cmd}")
             subprocess.run(cmd, check=True, shell=True, env=env, cwd=root_dir)
-        print("✅ Compilação de todas as versões concluída com sucesso.")
+        print("[OK] Compilacao de todas as versoes concluida com sucesso.")
     except subprocess.CalledProcessError as e:
-        print(f"❌ Erro durante a compilação: {e}")
+        print(f"[ERRO] Erro durante a compilacao: {e}")
         sys.exit(e.returncode)
 
 if __name__ == "__main__":
