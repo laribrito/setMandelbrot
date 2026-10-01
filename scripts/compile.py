@@ -14,6 +14,7 @@ def main():
     cmds = [
         f"g++ -O3 -ffast-math -o sequencial \"{os.path.join(src_dir, 'sequencial.cpp')}\"",
         f"g++ -O3 -ffast-math -std=c++17 -o ponto_a_ponto \"{os.path.join(src_dir, 'ponto_a_ponto.cpp')}\"",
+        f"g++ -O3 -ffast-math -std=c++17 -o ponto_a_ponto_linha \"{os.path.join(src_dir, 'ponto_a_ponto_linha.cpp')}\"",
         f"g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo \"{os.path.join(src_dir, 'paralelo.cpp')}\"",
         f"g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo_collapse \"{os.path.join(src_dir, 'paralelo_collapse.cpp')}\"",
         f"g++ -O3 -o comparador \"{os.path.join(src_dir, 'comparador.cpp')}\"",
