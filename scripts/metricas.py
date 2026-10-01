@@ -60,6 +60,8 @@ def load_dataset(csv_path: str = None, etapa: int = None) -> pd.DataFrame:
 
     # Limpeza e padronização de tipos
     df['TempoGasto'] = pd.to_numeric(df['TempoGasto'], errors='coerce')
+    if 'TempoTotal' in df.columns:
+        df['TempoTotal'] = pd.to_numeric(df['TempoTotal'], errors='coerce')
     df['WIDTH'] = pd.to_numeric(df['WIDTH'], errors='coerce').astype('Int64')
     df['HEIGHT'] = pd.to_numeric(df['HEIGHT'], errors='coerce').astype('Int64')
     df['MAX_ITER'] = pd.to_numeric(df['MAX_ITER'], errors='coerce').astype('Int64')
