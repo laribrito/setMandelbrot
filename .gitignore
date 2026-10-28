@@ -9,3 +9,7 @@ comparador
 .venv/
 __pycache__/
 *.pyc
+mpi_estatico
+mpi_dinamico
+mpi_dinamico_participativo
+mpi_dinamico_meia_linha
