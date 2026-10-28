@@ -15,13 +15,18 @@ setMandel/
 ├── src/                          # Códigos-fonte em C++17
 │   ├── sequencial.cpp            # Versão sequencial com otimização geométrica (simetria)
 │   ├── ponto_a_ponto.cpp         # Versão sequencial pura (baseline de referência)
-│   ├── paralelo.cpp              # Paralelismo 1D no loop externo (#pragma omp parallel for)
-│   ├── paralelo_collapse.cpp     # Paralelismo 2D (#pragma omp parallel for collapse(2))
+│   ├── paralelo.cpp              # Paralelismo 1D com OpenMP (#pragma omp parallel for)
+│   ├── paralelo_collapse.cpp     # Paralelismo 2D com OpenMP (collapse(2))
+│   ├── mpi_estatico.cpp          # MPI: Decomposição Estática (Blocos e Cíclico via MPI_Gatherv)
+│   ├── mpi_dinamico.cpp          # MPI: Dinâmico Coordenador Dedicado (Coordinator-Worker tradicional)
+│   ├── mpi_dinamico_participativo.cpp # MPI: Dinâmico Coordenador Participativo (Rank 0 calcula com MPI_Iprobe)
+│   ├── mpi_dinamico_meia_linha.cpp    # MPI: Experimento de Granularidade Sub-Linha (Meia Linha)
 │   └── comparador.cpp            # Utilitário de validação e equivalência de matrizes PPM
 │
 ├── scripts/                      # Suíte de automação, métricas e gráficos em Python
-│   ├── compile.py                # Script de compilação multiplataforma (Linux / Windows)
-│   ├── run_tests.py              # Automação de baterias de testes e histórico incremental
+│   ├── compile.py                # Script de compilação multiplataforma (OpenMP e MPI)
+│   ├── run_tests.py              # Automação de baterias OpenMP e histórico incremental
+│   ├── run_mpi.py                # Automação de baterias MPI (Processos 1, 2, 4, 8 e Chunks)
 │   ├── metricas.py               # Processamento estatístico, cálculo de Speedup e Eficiência
 │   └── graficos.py               # Renderização de gráficos individuais (PNG/PDF) e compilado
 │
@@ -98,3 +103,59 @@ python3 scripts/graficos.py
 ```
 
 Os arquivos serão exportados para a pasta `relatorios/`.
+
+---
+
+## 🌐 Etapa 2: Benchmarking com MPI (Relatório 2)
+
+### 1. Pré-requisito (Instalação do OpenMPI)
+Caso ainda não possua o compilador `mpicxx` e o executor `mpirun`:
+```bash
+# No Ubuntu / Debian:
+sudo apt update && sudo apt install -y openmpi-bin libopenmpi-dev
+
+# No Windows via MSYS2:
+pacman -S mingw-w64-x86_64-msmpi
+```
+
+### 2. Compilação
+Execute o script de compilação (ele detectará o `mpicxx` e compilará todas as versões MPI):
+```bash
+python3 scripts/compile.py
+```
+Ou compile manualmente:
+```bash
+mpicxx -O3 -ffast-math -std=c++17 -o mpi_estatico src/mpi_estatico.cpp
+mpicxx -O3 -ffast-math -std=c++17 -o mpi_dinamico src/mpi_dinamico.cpp
+mpicxx -O3 -ffast-math -std=c++17 -o mpi_dinamico_participativo src/mpi_dinamico_participativo.cpp
+mpicxx -O3 -ffast-math -std=c++17 -o mpi_dinamico_meia_linha src/mpi_dinamico_meia_linha.cpp
+```
+
+### 3. Execução Manual com MPI
+Configure os parâmetros em `in.txt` e execute com o número de processos desejado (`-np <P>`):
+
+```bash
+# 1. Execução Estática com Decomposição em Blocos Contíguos (SCHEDULE=block em in.txt)
+mpirun -np 4 ./mpi_estatico
+
+# 2. Execução Estática Intercalada / Cíclica (SCHEDULE=cyclic em in.txt)
+mpirun -np 4 ./mpi_estatico
+
+# 3. Execução Dinâmica Coordenador Dedicado (Rank 0 apenas coordena)
+mpirun -np 4 ./mpi_dinamico
+
+# 4. Execução Dinâmica Coordenador Participativo (Rank 0 também calcula pixels com MPI_Iprobe)
+mpirun -np 4 ./mpi_dinamico_participativo
+
+# 5. Execução Dinâmica de Teste com Meia-Linha (Experimento de Granularidade Fina vs Overhead)
+mpirun -np 4 ./mpi_dinamico_meia_linha
+```
+
+### 4. Automação de Benchmarks MPI
+Para rodar baterias completas com repetições e diferentes quantidades de processos (1, 2, 4, 8):
+```bash
+python3 scripts/run_mpi.py
+# ou com parâmetros CLI:
+python3 scripts/run_mpi.py --mode all --procs 1,2,4 --reps 3
+```
+
