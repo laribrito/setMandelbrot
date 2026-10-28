@@ -1,0 +1,5 @@
+-std=c++17
+-I/usr/lib/x86_64-linux-gnu/openmpi/include
+-I/usr/include/x86_64-linux-gnu/openmpi
+-I/usr/include/mpi
+-fopenmp
