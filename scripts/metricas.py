@@ -129,7 +129,7 @@ def analyze_schedules(df_metrics: pd.DataFrame, machine: str = "deCasa") -> pd.D
     Analisa o desempenho de cada política de escalonamento (Schedule + ChunkSize).
     Compara tempo médio, desvio padrão, Speedup e Eficiência por Cenário e Resolução.
     """
-    df_filtered = df_metrics[df_metrics['Code'].isin(['paralelo', 'paralelo_collapse'])].copy()
+    df_filtered = df_metrics[df_metrics['Code'].isin(['paralelo', 'paralelo_collapse', 'mpi_estatico', 'mpi_dinamico', 'mpi_dinamico_participativo', 'mpi_dinamico_meia_linha'])].copy()
     if machine and machine.lower() != 'all':
         df_filtered = df_filtered[df_filtered['Machine'] == machine]
 
@@ -211,7 +211,7 @@ def get_best_configurations(df_metrics: pd.DataFrame, machine: str = "deCasa") -
     """
     Identifica as configurações mais rápidas (menor tempo médio) para cada resolução e cenário.
     """
-    df_par = df_metrics[df_metrics['Code'].isin(['paralelo', 'paralelo_collapse'])].copy()
+    df_par = df_metrics[df_metrics['Code'].isin(['paralelo', 'paralelo_collapse', 'mpi_estatico', 'mpi_dinamico', 'mpi_dinamico_participativo', 'mpi_dinamico_meia_linha'])].copy()
     if machine and machine.lower() != 'all':
         df_par = df_par[df_par['Machine'] == machine]
 
