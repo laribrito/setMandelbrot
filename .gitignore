@@ -3,6 +3,7 @@ mandelbrot*
 out/
 sequencial
 ponto_a_ponto
+ponto_a_ponto_linha
 ponto_a_ponto_v2
 paralelo
 paralelo_collapse

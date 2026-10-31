@@ -8,6 +8,12 @@
 #include <cstdlib>
 #include <filesystem>
 
+// ==============================================================================
+// Identificador da Etapa do Projeto a que este código pertence
+// Use 1 para Etapa 1 (data/etapa1/), 2 para Etapa 2 (data/etapa2/), etc.
+// ==============================================================================
+const int ETAPA = 2;
+
 class Complex {
 public:
     double real;
@@ -79,8 +85,8 @@ RGB getPaletteColor(double t_base) {
 }
 
 int main() {
-    // Começa a marcar o tempo
-    auto start = std::chrono::high_resolution_clock::now();
+    // Marca o início da ação completa
+    auto totalStart = std::chrono::high_resolution_clock::now();
 
     // -------------------------------------------------------------
     // Cálculo
@@ -89,6 +95,7 @@ int main() {
     // Parâmetros padrão
     int WIDTH = 4096, HEIGHT = 4096, MAX_ITER = 1000;
     double RE_MIN = -2.0, RE_MAX = 1.0, IM_MIN = -1.5, IM_MAX = 1.5;
+    int etapaAtual = ETAPA;
 
     std::ifstream inFile("in.txt");
     if (inFile.is_open()) {
@@ -109,6 +116,7 @@ int main() {
                 else if (key == "RE_MAX") RE_MAX = std::stod(value);
                 else if (key == "IM_MIN") IM_MIN = std::stod(value);
                 else if (key == "IM_MAX") IM_MAX = std::stod(value);
+                else if (key == "ETAPA")  etapaAtual = std::stoi(value);
             }
         }
         inFile.close();
@@ -122,6 +130,9 @@ int main() {
     
     // Alocamos apenas a metade superior para economizar memória e evitar estouro de pilha
     std::vector<int> temps(limHeight * WIDTH, 0);
+
+    // Começa a marcar o tempo de puro processamento
+    auto start = std::chrono::high_resolution_clock::now();
 
     for (int i = 0; i < WIDTH; i++) {
         double x = RE_MIN + i * tamPixel_re;
@@ -145,25 +156,56 @@ int main() {
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
 
-    // Garante caminho padronizado da base de dados com fallback
-    std::string csvPath = "data/dateTimeExecution.csv";
-    if (!std::filesystem::exists("data/dateTimeExecution.csv") && std::filesystem::exists("dateTimeExecution.csv")) {
-        csvPath = "dateTimeExecution.csv";
-    } else {
-        std::filesystem::create_directories("data");
-    }
+    // Garante caminho padronizado da base de dados com base na etapa configurada
+    std::string etapaFolder = "data/etapa" + std::to_string(etapaAtual);
+    std::filesystem::create_directories(etapaFolder);
+    std::string csvPath = etapaFolder + "/dateTimeExecution.csv";
 
-    // Determina o número da execução atual com base nas linhas registradas no CSV
+    // Determina o número da execução atual e se o CSV já possui o cabeçalho com TempoTotal
     int executionNum = 1;
-    std::ifstream checkFile(csvPath);
-    if (checkFile.is_open()) {
-        std::string line;
-        while (std::getline(checkFile, line)) {
-            if (!line.empty()) {
-                executionNum++;
+    bool isNewFile = true;
+    bool hasTempoTotal = false;
+    std::vector<std::string> existingLines;
+
+    {
+        std::ifstream checkFile(csvPath);
+        if (checkFile.is_open()) {
+            std::string line;
+            while (std::getline(checkFile, line)) {
+                if (!line.empty()) {
+                    existingLines.push_back(line);
+                }
+            }
+            checkFile.close();
+
+            if (!existingLines.empty()) {
+                isNewFile = false;
+                executionNum = static_cast<int>(existingLines.size()) + 1;
+                if (existingLines[0].find("TempoTotal") != std::string::npos) {
+                    hasTempoTotal = true;
+                }
             }
         }
-        checkFile.close();
+    }
+
+    // Se o arquivo já existia mas não tinha a coluna TempoTotal no cabeçalho, migra
+    if (!isNewFile && !hasTempoTotal) {
+        std::ofstream rewriteFile(csvPath, std::ios::trunc);
+        if (rewriteFile.is_open()) {
+            rewriteFile << "DataHora,TempoGasto,TempoTotal,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code,Schedule,ChunkSize,Threads\n";
+            for (size_t k = 1; k < existingLines.size(); ++k) {
+                std::string oldLine = existingLines[k];
+                size_t firstComma = oldLine.find(',');
+                if (firstComma != std::string::npos) {
+                    size_t secondComma = oldLine.find(',', firstComma + 1);
+                    if (secondComma != std::string::npos) {
+                        oldLine.insert(secondComma + 1, "N/A,");
+                    }
+                }
+                rewriteFile << oldLine << "\n";
+            }
+            rewriteFile.close();
+        }
     }
 
     // Garante que a pasta out exista
@@ -228,18 +270,13 @@ int main() {
         std::cerr << "Erro ao abrir " << ppmFilename << " para escrita.\n";
     }
 
+    // Termina de marcar o tempo da ação completa
+    auto totalEnd = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> totalElapsed = totalEnd - totalStart;
+
     // Obtém a data e hora atual do sistema
     auto now = std::chrono::system_clock::now();
     std::time_t current_time = std::chrono::system_clock::to_time_t(now);
-
-    // Verifica se o arquivo CSV é novo ou está vazio para gravar o cabeçalho
-    bool isNewFile = false;
-    {
-        std::ifstream testFile(csvPath);
-        if (!testFile || testFile.peek() == std::ifstream::traits_type::eof()) {
-            isNewFile = true;
-        }
-    }
 
     // Salva o resultado adicionando (append) no arquivo CSV
     std::ofstream csvFile(csvPath, std::ios::app);
@@ -249,12 +286,13 @@ int main() {
         if (!machineName) machineName = "Unknown";
 
         if (isNewFile) {
-            csvFile << "DataHora,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code,Schedule,ChunkSize,Threads\n";
+            csvFile << "DataHora,TempoGasto,TempoTotal,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code,Schedule,ChunkSize,Threads\n";
         }
         
-        // Formato: YYYY-MM-DD HH:MM:SS,TempoGasto,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code,Schedule,ChunkSize,Threads
+        // Formato: YYYY-MM-DD HH:MM:SS,TempoGasto,TempoTotal,WIDTH,HEIGHT,MAX_ITER,RE_MIN,RE_MAX,IM_MIN,IM_MAX,Machine,Code,Schedule,ChunkSize,Threads
         csvFile << std::put_time(std::localtime(&current_time), "%Y-%m-%d %H:%M:%S") 
                 << "," << elapsed.count()
+                << "," << totalElapsed.count()
                 << "," << WIDTH
                 << "," << HEIGHT
                 << "," << MAX_ITER
@@ -267,7 +305,8 @@ int main() {
         csvFile.close();
         
         std::cout << "Execução finalizada!\n";
-        std::cout << "Tempo gasto: " << elapsed.count() << " segundos.\n";
+        std::cout << "Tempo gasto (puro processamento): " << elapsed.count() << " segundos.\n";
+        std::cout << "Tempo total (acao completa): " << totalElapsed.count() << " segundos.\n";
         std::cout << "Registro salvo em '" << csvPath << "'\n";
     } else {
         std::cerr << "Erro ao abrir " << csvPath << " para escrita.\n";

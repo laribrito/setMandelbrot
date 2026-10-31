@@ -14,6 +14,7 @@ def main():
     cmds = [
         f"g++ -O3 -ffast-math -o sequencial \"{os.path.join(src_dir, 'sequencial.cpp')}\"",
         f"g++ -O3 -ffast-math -std=c++17 -o ponto_a_ponto \"{os.path.join(src_dir, 'ponto_a_ponto.cpp')}\"",
+        f"g++ -O3 -ffast-math -std=c++17 -o ponto_a_ponto_linha \"{os.path.join(src_dir, 'ponto_a_ponto_linha.cpp')}\"",
         f"g++ -O3 -ffast-math -march=native -std=c++17 -o ponto_a_ponto_v2 \"{os.path.join(src_dir, 'ponto_a_ponto_v2.cpp')}\"",
         f"g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo \"{os.path.join(src_dir, 'paralelo.cpp')}\"",
         f"g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo_collapse \"{os.path.join(src_dir, 'paralelo_collapse.cpp')}\"",
@@ -44,7 +45,7 @@ def main():
             print("   - Linux (Ubuntu/Debian): sudo apt update && sudo apt install -y openmpi-bin libopenmpi-dev")
             print("   - Windows (MSYS2): pacman -S mingw-w64-x86_64-msmpi\n")
     except subprocess.CalledProcessError as e:
-        print(f"❌ Erro durante a compilação: {e}")
+        print(f"[ERRO] Erro durante a compilacao: {e}")
         sys.exit(e.returncode)
 
 if __name__ == "__main__":
