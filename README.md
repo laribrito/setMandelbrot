@@ -15,6 +15,7 @@ setMandel/
 ├── src/                          # Códigos-fonte em C++17
 │   ├── sequencial.cpp            # Versão sequencial com otimização geométrica (simetria)
 │   ├── ponto_a_ponto.cpp         # Versão sequencial pura (baseline de referência)
+│   ├── ponto_a_ponto_v2.cpp      # Versão sequencial otimizada Tipo A (escalar puro e ILP)
 │   ├── paralelo.cpp              # Paralelismo 1D com OpenMP (#pragma omp parallel for)
 │   ├── paralelo_collapse.cpp     # Paralelismo 2D com OpenMP (collapse(2))
 │   ├── mpi_estatico.cpp          # MPI: Decomposição Estática (Blocos e Cíclico via MPI_Gatherv)
