@@ -83,17 +83,23 @@ def get_baseline_times(df: pd.DataFrame, config_cols: list = None) -> pd.DataFra
     if config_cols is None:
         config_cols = ['Machine', 'Scenario', 'WIDTH', 'HEIGHT', 'MAX_ITER']
 
-    # 1. Baseline prioritário: ponto_a_ponto
+    # 1. Baseline prioritário: ponto_a_ponto_v2
+    df_pap2 = df[df['Code'] == 'ponto_a_ponto_v2'].copy()
+    base_pap2 = df_pap2.groupby(config_cols)['TempoGasto'].mean().reset_index().rename(columns={'TempoGasto': 'T1_pap2'})
+
+    # 2. Baseline secundário: ponto_a_ponto
     df_pap = df[df['Code'] == 'ponto_a_ponto'].copy()
     base_pap = df_pap.groupby(config_cols)['TempoGasto'].mean().reset_index().rename(columns={'TempoGasto': 'T1_pap'})
 
-    # 2. Baseline secundário: sequencial
+    # 3. Baseline terciário: sequencial
     df_seq = df[df['Code'] == 'sequencial'].copy()
     base_seq = df_seq.groupby(config_cols)['TempoGasto'].mean().reset_index().rename(columns={'TempoGasto': 'T1_seq'})
 
     # Combina baselines
-    base_merged = pd.merge(base_pap, base_seq, on=config_cols, how='outer')
-    base_merged['T1'] = base_merged['T1_pap'].combine_first(base_merged['T1_seq'])
+    base_merged = pd.merge(base_pap2, base_pap, on=config_cols, how='outer')
+    base_merged['T1'] = base_merged['T1_pap2'].combine_first(base_merged['T1_pap'])
+    base_merged = pd.merge(base_merged, base_seq, on=config_cols, how='outer')
+    base_merged['T1'] = base_merged['T1'].combine_first(base_merged['T1_seq'])
 
     return base_merged[config_cols + ['T1']]
 

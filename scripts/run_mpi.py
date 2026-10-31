@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 """
-==============================================================================
-Script de Automação de Benchmarks MPI para o Relatório 2 (setMandel)
-Disciplina: DEC107 — Processamento Paralelo (UESC)
-==============================================================================
 Executa baterias de testes para as versões MPI:
   - mpi_estatico (Estratégias: 'block' e 'cyclic')
   - mpi_dinamico (Estratégia: Coordenador-Trabalhador com variação de chunk)

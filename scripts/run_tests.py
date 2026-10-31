@@ -118,6 +118,7 @@ def compile_binaries():
     cmds = [
         ("sequencial",        f"g++ -O3 -ffast-math -o sequencial \"{os.path.join(src_dir, 'sequencial.cpp')}\""),
         ("ponto_a_ponto",     f"g++ -O3 -ffast-math -std=c++17 -o ponto_a_ponto \"{os.path.join(src_dir, 'ponto_a_ponto.cpp')}\""),
+        ("ponto_a_ponto_v2",  f"g++ -O3 -ffast-math -march=native -std=c++17 -o ponto_a_ponto_v2 \"{os.path.join(src_dir, 'ponto_a_ponto_v2.cpp')}\""),
         ("paralelo",          f"g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo \"{os.path.join(src_dir, 'paralelo.cpp')}\""),
         ("paralelo_collapse", f"g++ -O3 -ffast-math -fopenmp -std=c++17 -o paralelo_collapse \"{os.path.join(src_dir, 'paralelo_collapse.cpp')}\""),
     ]
@@ -145,6 +146,17 @@ def run_executable(executable, machine_name="deCasa", threads=None):
     if res.returncode != 0:
         print(f"    ❌ Erro na execução ({cmd}):\n{res.stderr}")
         return None
+
+    # Extrai o tempo puro de cálculo impresso pelo C++ (descartando o tempo de I/O em disco)
+    # Ex: "Tempo gasto (puro processamento): 5.68568 segundos." ou "Tempo gasto: 5.68568 segundos."
+    import re
+    match = re.search(r"Tempo gasto(?:\s*\(puro processamento\))?:\s*([0-9.]+)\s*segundos", res.stdout)
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            pass
+
     return duration
 
 def get_default_csv_path():
@@ -421,6 +433,27 @@ def build_test_list(mode, scenarios, sizes, schedules, threads=4):
                     "THREADS": 1
                 })
 
+    # 1.1 Ponto a Ponto v2 (otimizado Tipo A)
+    if mode in ["pap_v2", "pap2"]:
+        for scen_key in scenarios:
+            scen = SCENARIOS[scen_key]
+            for size in sizes:
+                tests.append({
+                    "exe": "ponto_a_ponto_v2",
+                    "scenario_key": scen_key,
+                    "scenario_name": scen["name"],
+                    "WIDTH": size,
+                    "HEIGHT": size,
+                    "MAX_ITER": scen["MAX_ITER"],
+                    "RE_MIN": scen["RE_MIN"],
+                    "RE_MAX": scen["RE_MAX"],
+                    "IM_MIN": scen["IM_MIN"],
+                    "IM_MAX": scen["IM_MAX"],
+                    "SCHEDULE": "N/A",
+                    "CHUNK_SIZE": 0,
+                    "THREADS": 1
+                })
+
     # 2. Paralelo (loop externo)
     if mode in ["all", "paralelo"]:
         for scen_key in scenarios:
@@ -479,17 +512,18 @@ def show_interactive_menu():
     print("  [3] ⚡ Rodar apenas PARALELO (Static, Dynamic, Guided, Auto - 3x cada)")
     print("  [4] 🔀 Rodar apenas PARALELO COLLAPSE(2) (Static, Dynamic, Guided, Auto - 3x cada)")
     print("  [5] 🧪 Teste Rápido (Apenas resolução 4096, 1 repetição de cada)")
+    print("  [6] ⚡ Rodar PONTO A PONTO V2 (5x cada em 4096, 8192, 16384)")
     print("  [0] Sair")
     print("=======================================================")
-    choice = input("Digite a opção desejada [1-5, 0]: ").strip()
+    choice = input("Digite a opção desejada [1-6, 0]: ").strip()
     return choice
 
 def main():
     parser = argparse.ArgumentParser(description="Automatizador de Benchmarks Mandelbrot")
     parser.add_argument("--tudo", "-t", action="store_true",
                         help="Opção rápida: roda TUDO um após o outro (ponto a ponto + paralelo, 3x cada)")
-    parser.add_argument("--mode", choices=["all", "pap", "seq", "base", "paralelo", "collapse"], default=None,
-                        help="Quais programas rodar: 'pap' (ponto a ponto), 'seq' (sequencial), 'base' (ambos os bases), 'paralelo', 'collapse' ou 'all'")
+    parser.add_argument("--mode", choices=["all", "pap", "pap_v2", "seq", "base", "paralelo", "collapse"], default=None,
+                        help="Quais programas rodar: 'pap' (ponto a ponto), 'pap_v2' (ponto a ponto v2), 'seq' (sequencial), 'base' (ambos os bases), 'paralelo', 'collapse' ou 'all'")
     parser.add_argument("--threads", "-j", type=int, default=4,
                         help="Número de threads OpenMP para as versões paralelas (padrão: 4)")
     parser.add_argument("--reps", type=int, default=3,
@@ -540,6 +574,10 @@ def main():
             mode = "all"
             sizes = [4096]
             reps = 1
+        elif choice == "6":
+            mode = "pap_v2"
+            sizes = [4096, 8192, 16384]
+            reps = 5
         elif choice == "0":
             print("Saindo...")
             sys.exit(0)
